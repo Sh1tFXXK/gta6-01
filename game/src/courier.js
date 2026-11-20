@@ -47,9 +47,16 @@ export function startCourier(S, rng, audio) {
   gig.active = true;
   gig.stage = 0;
   gig.timer = COURIER_LEG_TIME;
+  // One gig in ten is a rush job: half the time, double the pay, and the
+  // dispatcher says so up front — a gamble for drivers who know the roads.
+  gig.rush = Math.random() < 0.1;
+  if (gig.rush) {
+    gig.timer = Math.round(COURIER_LEG_TIME / 2);
+    gig.pay *= 2;
+  }
   S.mission.banner = `COURIER GIG — pick up at ${gig.pickup.label}`;
   S.mission.bannerT = 3;
-  addMessage(S, `Courier gig: pick up the package at ${gig.pickup.label}, drop it at ${gig.drop.label} — $${gig.pay} plus a speed tip.`);
+  addMessage(S, `Courier gig: pick up the package at ${gig.pickup.label}, drop it at ${gig.drop.label} — $${gig.pay} plus a speed tip.${gig.rush ? ' RUSH JOB — half the time, double the pay!' : ''}`);
   if (audio) audio.pickup();
 }
 

@@ -58,6 +58,18 @@ export const RACE_DEFS = [
       { x: 25 * TILE, y: 57 * TILE },
     ],
   },
+  {
+    id: 5, name: 'Harbor Lights', reward: 1000, rivalSpeed: 340,
+    start: { x: 57 * TILE, y: 17 * TILE },
+    checkpoints: [
+      { x: 57 * TILE, y: 33 * TILE },
+      { x: 41 * TILE, y: 33 * TILE },
+      { x: 41 * TILE, y: 49 * TILE },
+      { x: 25 * TILE, y: 49 * TILE },
+      { x: 25 * TILE, y: 17 * TILE },
+      { x: 41 * TILE, y: 17 * TILE },
+    ],
+  },
 ];
 
 // The race state lives on S.race so save/load, the HUD and the renderer can
@@ -190,18 +202,23 @@ export function updateRaces(S, dt, audio) {
 }
 
 // Crossing the last checkpoint pays out. Beating the rival doubles the
-// reward; a first finish always records the best time for the race.
+// reward; a first finish always records the best time for the race. Racing
+// after dark pays a 50% night bonus — the streets are emptier, the stakes
+// are higher, and the city looks better with its lights on.
 function finishRace(S, audio) {
   const race = S.race;
   const def = race.def;
   const rivalDone = race.rival && race.rival.finished;
-  const payout = rivalDone ? def.reward : def.reward * 2;
+  let payout = rivalDone ? def.reward : def.reward * 2;
+  const hour = (S.clockMin / 60) % 24;
+  const isNight = hour >= 20 || hour < 5;
+  if (isNight) payout = Math.round(payout * 1.5);
   const t = race.timer;
   const prev = race.best[def.id];
   const isRecord = !prev || t < prev;
   if (isRecord) race.best[def.id] = Math.round(t * 10) / 10;
   race.won++;
-  addMoney(S, payout, `${def.name} ${rivalDone ? '(rival won)' : 'WIN!'} — ${t.toFixed(1)}s`);
+  addMoney(S, payout, `${def.name} ${rivalDone ? '(rival won)' : 'WIN!'} — ${t.toFixed(1)}s${isNight ? ' (night bonus x1.5)' : ''}`);
   S.mission.banner = rivalDone
     ? `${def.name.toUpperCase()} DONE — ${t.toFixed(1)}s`
     : `${def.name.toUpperCase()} — YOU WIN! ${t.toFixed(1)}s`;

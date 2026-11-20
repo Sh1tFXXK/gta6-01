@@ -91,6 +91,15 @@ export function updateTerritory(S, rng, dt, audio) {
         S.mission.bannerT = 3.5;
         addMessage(S, `${zone.name} flies your colours now — it pays $${TURF_INCOME_PER_ZONE} every ${TURF_INCOME_EVERY}s.`);
         if (audio) audio.turfWin();
+        // Owning all five zones at once is the turf endgame: a one-time
+        // king's ransom, and a banner the whole city can read.
+        if (turfOwnedCount(S) >= TURF_ZONES.length && !S.turf.kingPaid) {
+          S.turf.kingPaid = true;
+          addMoney(S, 500, 'KING OF SOLMAR BAY — all 5 zones yours!');
+          S.mission.banner = 'KING OF SOLMAR BAY — ALL 5 ZONES YOURS!';
+          S.mission.bannerT = 5;
+          addMessage(S, 'Every corner of Solmar Bay flies your colours. The Vipers are done here.');
+        }
       }
     } else {
       // Away from the zone, control slowly cools back toward the owner's
