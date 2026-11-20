@@ -39,6 +39,11 @@ export function createState(seed) {
     },
     taxi: { active: false, fare: null, timer: 0 },
     rampage: { active: false, timer: 0, kills: 0 },
+    // Round 3: street races, gang turf and the escort job live here.
+    race: null,    // set up by initRaces in races.js
+    turf: null,    // set up by initTerritory in territory.js
+    escort: null,  // Vera's car while mission 7 runs, else null
+    street: { racesWon: 0, turfEarned: 0 },
     collect: { total: 0, got: 0 },
     stashGot: 0,     // hidden stash packages found (of STASH_TOTAL)
     stashTotal: STASH_TOTAL,

@@ -1,6 +1,7 @@
 // hud.js — the on-screen HUD and the live minimap. One job: information display.
 import { VIEW_W, VIEW_H, TILE, CITY_SIZE, COLORS } from './config.js';
 import { MISSION_DEFS } from './config.js';
+import { challengeHudLines } from './challenges.js';
 
 function fmtClock(min) {
   const h = Math.floor(min / 60) % 24, m = Math.floor(min % 60);
@@ -38,6 +39,31 @@ export function drawHUD(ctx, S) {
   ctx.fillText(`CAR ${p.inCar ? p.inCar.typeName + '  ♥' + Math.max(0, Math.ceil(p.inCar.hp)) : 'on foot'}`, 110, 124);
   ctx.fillStyle = '#ffd23f';
   ctx.fillText(`◆ STASH ${S.stashGot}/${S.stashTotal}`, 26, 140);
+  // Round 3: turf standing and the active race, right under the stash line.
+  if (S.turf) {
+    const owned = S.turf.zones.filter((z) => z.owner === 'rook').length;
+    ctx.fillStyle = '#57e389';
+    ctx.fillText(`⬢ TURF ${owned}/5  +$${S.turf.earned}`, 150, 140);
+  }
+  if (S.race && S.race.active && S.race.def) {
+    ctx.fillStyle = '#ffd23f';
+    ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.fillText(`🏁 ${S.race.def.name}  CP ${S.race.cp}/${S.race.def.checkpoints.length}  ${S.race.timer.toFixed(1)}s`, 26, 158);
+    ctx.font = '12px system-ui, sans-serif';
+  }
+  if (S.escort && S.escort.car) {
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`VERA ♥${Math.max(0, Math.ceil(S.escort.car.hp))}`, 26, 176);
+  }
+  // Round 3: today's challenge, one line under everything else.
+  if (S.daily) {
+    ctx.fillStyle = '#ffd23f';
+    ctx.font = '12px system-ui, sans-serif';
+    for (const line of challengeHudLines(S)) {
+      ctx.fillText(line, 26, 194);
+      break; // one line fits; the rest wait for the pause screen
+    }
+  }
   // Mission objective panel (top centre).
   if (S.mission.objective) {
     ctx.font = 'bold 15px system-ui, sans-serif';
@@ -53,13 +79,20 @@ export function drawHUD(ctx, S) {
     ctx.fillStyle = '#ff4d4d'; ctx.font = 'bold 18px system-ui, sans-serif';
     ctx.fillText(`⏱ ${Math.ceil(S.mission.timer)}s`, VIEW_W / 2 - 40, 66);
   }
+  // Race countdown, big and centred — the light is red until it says GO.
+  if (S.race && S.race.active && S.race.countdown > 0) {
+    ctx.fillStyle = '#ff4d4d'; ctx.font = 'bold 44px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(String(Math.ceil(S.race.countdown)), VIEW_W / 2, VIEW_H / 2 - 160);
+    ctx.textAlign = 'left';
+  }
   if (S.rampage.active) {
     ctx.fillStyle = '#ff9f1c'; ctx.font = 'bold 18px system-ui, sans-serif';
     ctx.fillText(`RAMPAGE ${Math.ceil(S.rampage.timer)}s — ${S.rampage.kills} down`, 24, VIEW_H - 24);
   }
-  // Toast messages (start below the taller status panel).
+  // Toast messages (start below the taller status panel — lower still when
+  // the race / escort lines are showing, so nothing overlaps).
   ctx.font = '14px system-ui, sans-serif';
-  let y = 164;
+  let y = (S.race && S.race.active) || S.escort ? 200 : 164;
   for (const m of S.messages) {
     ctx.fillStyle = 'rgba(8,12,20,0.65)';
     const w = ctx.measureText(m.text).width + 20;
@@ -79,7 +112,7 @@ export function drawHUD(ctx, S) {
   }
   // Controls reminder (bottom centre, small).
   ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('WASD move / drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi fare · R rampage · P pause · M mute', VIEW_W / 2, VIEW_H - 8);
+  ctx.fillText('WASD move / drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi fare · R rampage · V race · P pause · M mute', VIEW_W / 2, VIEW_H - 8);
   ctx.textAlign = 'left';
   ctx.restore();
 }

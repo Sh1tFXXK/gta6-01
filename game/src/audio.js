@@ -81,6 +81,16 @@ export function createAudio() {
     explosion() { noise(0.7, 0.6, 300); blip(90, 0.5, 'sine', 0.4, 30); },
     siren() { blip(750, 0.35, 'sine', 0.10, 950); },
     horn() { blip(370, 0.25, 'square', 0.12); setTimeout(() => blip(370, 0.2, 'square', 0.1), 140); },
+    // Round 3 sounds: race countdown beeps, a green-light go, checkpoint
+    // chimes, a win fanfare, turf capture / loss stings, vault ticks.
+    raceBeep() { blip(440, 0.12, 'square', 0.22); },
+    raceGo() { blip(880, 0.3, 'square', 0.25, 1320); },
+    raceCheckpoint() { blip(1046, 0.1, 'sine', 0.25); setTimeout(() => blip(1318, 0.12, 'sine', 0.25), 80); },
+    raceWin() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.18, 'triangle', 0.25), i * 110)); },
+    turfWin() { [392, 523, 659].forEach((f, i) => setTimeout(() => blip(f, 0.16, 'triangle', 0.25), i * 120)); },
+    turfLost() { [330, 262, 196].forEach((f, i) => setTimeout(() => blip(f, 0.2, 'triangle', 0.22), i * 140)); },
+    vaultTick() { blip(1200, 0.04, 'square', 0.08); },
+    challengeDone() { [659, 784, 988, 1318].forEach((f, i) => setTimeout(() => blip(f, 0.15, 'sine', 0.25), i * 100)); },
     // Round 2 sounds: a rising stunt jingle, a stash chime, and low thunder.
     stunt() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.14, 'triangle', 0.25), i * 90)); },
     stash() { blip(1318, 0.12, 'sine', 0.25); setTimeout(() => blip(1568, 0.2, 'sine', 0.25), 110); },

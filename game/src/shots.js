@@ -9,6 +9,7 @@ import { spawnPeds } from './pedestrians.js';
 import { spawnGang } from './combat.js';
 import { spawnCopCar } from './police.js';
 import { startMission } from './missions.js';
+import { RACE_DEFS } from './races.js';
 
 function baseScene(S, rng) {
   S.cars = []; S.peds = []; S.cops = []; S.copCars = []; S.bullets = [];
@@ -87,6 +88,25 @@ export function applyShot(S, name, rng) {
     S.cars.push(car);
     spawnGang(S, rng, P.arcade.x, P.arcade.y, 2);
     S.cam.x = S.player.x - 640; S.cam.y = S.player.y - 400;
+  } else if (name === 'race') {
+    // Round 3: a street race in progress — player in a Comet GT chasing the
+    // rival muscle car toward checkpoint 2, start pad and rings in frame.
+    const def = RACE_DEFS[0];
+    const car = makeCar(def.start.x + 40, def.start.y, 0, 'sports', 'player');
+    car.speed = 300;
+    S.cars.push(car);
+    const rival = makeCar(def.checkpoints[0].x - 120, def.checkpoints[0].y + 30, 0, 'muscle', 'rival');
+    rival.speed = 210;
+    S.cars.push(rival);
+    S.player.inCar = car; S.player.x = car.x; S.player.y = car.y;
+    S.player.health = 100; S.player.ammo = 60; S.money = 940;
+    S.race.active = true; S.race.def = def; S.race.cp = 1;
+    S.race.timer = 12.4; S.race.countdown = 0; S.race.started = true;
+    S.race.rival = rival; S.race.best = { 1: 48.2 };
+    S.mission.objective = 'Sunset Sprint — hit checkpoint 2, beat the rival!';
+    S.mission.banner = 'SUNSET SPRINT — GO!';
+    S.mission.bannerT = 2;
+    S.cam.x = car.x - 640; S.cam.y = car.y - 400;
   }
   // Keep the camera centred on the player for every play shot.
   S.cam.x = Math.max(0, Math.min(S.player.x - 640, 3072 - 1280));

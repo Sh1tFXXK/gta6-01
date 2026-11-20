@@ -11,6 +11,10 @@ import { spawnPeds, updatePeds } from './pedestrians.js';
 import { updatePolice } from './police.js';
 import { fireBullet, updateBullets, updateEnemies, updatePickups, spawnPickups, spawnStash } from './combat.js';
 import { nextMission, updateMission, startRampage, updateRampage, startTaxiFare, updateTaxiFare, saveGame, loadGame } from './missions.js';
+import { initRaces, tryStartRace, updateRaces } from './races.js';
+import { initTerritory, updateTerritory } from './territory.js';
+import { spawnStreetLife, spawnStreetPickups, buyCoffee } from './streetlife.js';
+import { initChallenges, updateChallenges } from './challenges.js';
 import { drawHUD, drawMinimap } from './hud.js';
 import { drawWorld, drawTitle, drawPause, drawEndScreen, drawMissionDone } from './render.js';
 import { applyShot } from './shots.js';
@@ -36,6 +40,10 @@ spawnParkedCars(S, rng, 12);
 spawnPeds(S, rng, 26);
 spawnPickups(S, rng, 12);
 spawnStash(S, rng);
+// Round 3: race pads, turf zones and the new street life join the city.
+initRaces(S); initTerritory(S);
+spawnStreetLife(S, rng); spawnStreetPickups(S, rng, 10);
+initChallenges(S);
 S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
 S.player.x = 21 * TILE; S.player.y = 21 * TILE;
 
@@ -57,6 +65,10 @@ function restart() {
   Object.assign(S, fresh);
   spawnTraffic(S, rng, 16); spawnParkedCars(S, rng, 12); spawnPeds(S, rng, 26); spawnPickups(S, rng, 12);
   spawnStash(S, rng);
+  // Round 3 systems restart with the world.
+  initRaces(S); initTerritory(S);
+  spawnStreetLife(S, rng); spawnStreetPickups(S, rng, 10);
+  initChallenges(S);
   S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
   S.screen = 'play';
 }
@@ -121,6 +133,8 @@ function step(dt) {
   if (input.consume('n')) nextMission(S, rng, audio);
   if (input.consume('r')) startRampage(S, audio);
   if (input.consume('t')) startTaxiFare(S, rng);
+  if (input.consume('v')) tryStartRace(S, rng, audio);
+  if (input.consume('b')) buyCoffee(S, audio);
   if (input.consume('g') && S.player.inCar) audio.horn();
   if (S.player.inCar && input.consume('e')) exitCar(S);
   if (S.autopilot) autopilotDrive(S, dt);
@@ -145,6 +159,10 @@ function step(dt) {
   updateMission(S, rng, dt, audio);
   updateRampage(S, dt, audio);
   updateTaxiFare(S, dt, audio);
+  // Round 3 systems tick with the rest of the city.
+  updateRaces(S, dt, audio);
+  updateTerritory(S, rng, dt, audio);
+  updateChallenges(S, dt, audio);
   collideCars(S, dt, audio);
   // Respawn traffic / peds that wandered off, keeping the city alive.
   if (S.cars.filter((c) => c.driver === 'traffic').length < 10) spawnTraffic(S, rng, 4);

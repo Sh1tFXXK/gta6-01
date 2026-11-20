@@ -3,6 +3,9 @@
 import { TILE, CITY_TILES, CITY_SIZE, VIEW_W, VIEW_H, COLORS, GAME_NAME, CITY_NAME, MISSION_DEFS, PLAYER_NAME, CONTACT_NAME, GANG_NAME } from './config.js';
 import { isRoadTile, isWaterTile, isSandTile } from './city.js';
 import { clamp, lerp } from './random.js';
+import { drawRaces } from './races.js';
+import { drawTerritory } from './territory.js';
+import { challengeBoardText } from './challenges.js';
 
 // How dark the night overlay is at a given in-game clock (minutes).
 // Day is clear, dusk and dawn fade in, deep night is a blue 0.38 veil.
@@ -24,6 +27,8 @@ export function drawWorld(ctx, S) {
   drawParks(ctx, S);
   drawBuildings(ctx, S);
   drawRamps(ctx, S);
+  drawTerritory(ctx, S);
+  drawRaces(ctx, S);
   drawPickups(ctx, S);
   drawMissionMarker(ctx, S);
   drawCars(ctx, S);
@@ -173,6 +178,11 @@ function drawPickups(ctx, S) {
       ctx.fillStyle = '#fff'; ctx.fillRect(-4, -4, 8, 8);
       ctx.rotate(-Math.PI / 4);
     }
+    // Round 3 pickups: wrench (grey, fixes your car), coffee (brown cup,
+    // refills sprint) and briefcase (dark case, $75 inside).
+    else if (pk.kind === 'wrench') { ctx.fillStyle = '#95a5a6'; ctx.fillRect(-10, -10, 20, 20); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('W', 0, 4); }
+    else if (pk.kind === 'coffee') { ctx.fillStyle = '#8b5a2b'; ctx.fillRect(-9, -9, 18, 18); ctx.fillStyle = '#fff'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('C', 0, 4); }
+    else if (pk.kind === 'briefcase') { ctx.fillStyle = '#2c3e50'; ctx.fillRect(-11, -8, 22, 16); ctx.fillStyle = '#ffd23f'; ctx.fillRect(-4, -11, 8, 4); ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('$', 0, 4); }
     else { ctx.fillStyle = '#f39c12'; ctx.fillRect(-10, -10, 20, 20); ctx.fillStyle = '#fff'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('A', 0, 4); }
     ctx.restore();
   }
@@ -362,8 +372,9 @@ export function drawTitle(ctx, S) {
   ctx.font = '17px system-ui, sans-serif'; ctx.fillStyle = '#fff';
   const lines = [
     `${PLAYER_NAME} is back in ${CITY_NAME} with empty pockets and a long memory.`,
-    `${CONTACT_NAME} has work — six jobs, from a stolen sedan to the last delivery.`,
+    `${CONTACT_NAME} has work — eight jobs, from a stolen sedan to the vault job.`,
     `Steal cars, dodge the SBPD, run the missions, and make the city yours.`,
+    `Race the streets, take gang turf, escort Vera, crack the vault.`,
     `Day turns to night, rain rolls in, and 10 hidden stash drops pay $100 each.`,
     ``,
     `WASD move / drive · E enter & exit cars · Mouse aim, Click shoot · F punch`,
@@ -383,6 +394,16 @@ export function drawPause(ctx, S) {
   ctx.font = 'bold 48px system-ui, sans-serif'; ctx.fillText('PAUSED', VIEW_W / 2, 300);
   ctx.font = '18px system-ui, sans-serif';
   ctx.fillText(`Money $${S.money} · Missions done ${S.stats.missionsDone} of ${MISSION_DEFS.length} · Cars stolen ${S.stats.carsStolen} · Stash ${S.stashGot}/${S.stashTotal} · Stunts ${S.stats.stunts}`, VIEW_W / 2, 350);
+  // Round 3: today's challenge board, so the pause screen is worth opening.
+  const board = challengeBoardText(S);
+  ctx.fillStyle = '#ffd23f'; ctx.font = 'bold 16px system-ui, sans-serif';
+  ctx.fillText('TODAY\'S CHALLENGES', VIEW_W / 2, 420);
+  ctx.fillStyle = '#fff'; ctx.font = '15px system-ui, sans-serif';
+  board.forEach((line, i) => ctx.fillText(line, VIEW_W / 2, 448 + i * 26));
+  if (S.race && Object.keys(S.race.best).length > 0) {
+    ctx.fillStyle = '#ffd23f'; ctx.font = '15px system-ui, sans-serif';
+    ctx.fillText('RACE BESTS: ' + Object.entries(S.race.best).map(([id, t]) => `Race ${id} ${t.toFixed(1)}s`).join('  ·  '), VIEW_W / 2, 448 + board.length * 26 + 8);
+  }
   ctx.fillText('P resume · H save · L load · Enter restart · M mute', VIEW_W / 2, 390);
   ctx.textAlign = 'left';
 }

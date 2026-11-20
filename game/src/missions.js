@@ -6,6 +6,7 @@ import { addMessage, addMoney } from './state.js';
 import { spawnGang } from './combat.js';
 import { makeCar } from './vehicles.js';
 import { raiseWanted } from './player.js';
+import { setupMission78, updateMission78 } from './missions2.js';
 
 export function currentMissionDef(S) { return MISSION_DEFS[S.mission.index] || null; }
 
@@ -23,7 +24,7 @@ export function startMission(S, rng, audio) {
     raiseWanted(S, 2, 'The SBPD is already on your tail — move!');
     m.timer = 150;
   }
-  setupMissionStage(S, rng);
+  setupMissionStage(S, rng, audio);
 }
 
 function setTarget(S, place, objective) {
@@ -31,7 +32,7 @@ function setTarget(S, place, objective) {
   S.mission.objective = objective;
 }
 
-export function setupMissionStage(S, rng) {
+export function setupMissionStage(S, rng, audio) {
   const m = S.mission, P = S.city.places;
   if (m.index === 0) {
     setTarget(S, P.docks, 'Steal any car and drive to the Docks');
@@ -53,12 +54,22 @@ export function setupMissionStage(S, rng) {
     // The Last Delivery: three drops on one clock, cops already chasing.
     const stops = [P.gas, P.pier, P.hotel];
     setTarget(S, stops[m.stage], `Drop ${m.stage + 1} of 3 — ${stops[m.stage].label} (${Math.ceil(m.timer)}s left)`);
+  } else if (m.index === 6 || m.index === 7) {
+    // Round 3: missions 7 (Vera's Escort) and 8 (The Vault Job) live in missions2.js.
+    setupMission78(S, rng, audio);
   }
 }
 
 export function updateMission(S, rng, dt, audio) {
   const m = S.mission;
   if (!m.active) return;
+  // Round 3 missions (7 and 8) run their own update in missions2.js.
+  if (m.index >= 6) {
+    return updateMission78(S, rng, dt, audio, {
+      complete: () => completeMission(S, audio),
+      fail: (why) => failMission(S, why, audio),
+    });
+  }
   if (m.bannerT > 0) m.bannerT -= dt;
   if (m.timer > 0) {
     m.timer -= dt;
@@ -78,14 +89,14 @@ export function updateMission(S, rng, dt, audio) {
       m.delivered++; addMoney(S, 60, 'package delivered');
       if (audio) audio.cash();
       if (m.delivered >= 3) completeMission(S, audio);
-      else { m.stage++; setupMissionStage(S, rng); }
+      else { m.stage++; setupMissionStage(S, rng, audio); }
     }
   } else if (m.index === 2) {
     if (m.stage === 0) {
       const inTaxi = S.player.inCar && S.player.inCar.type === 'taxi';
       if (near && inTaxi) {
         m.stage = 1; m.passenger = true; m.timer = 120;
-        setupMissionStage(S, rng);
+        setupMissionStage(S, rng, audio);
         addMessage(S, 'Fare aboard! "Hotel Solmar, and step on it!"');
         if (audio) audio.pickup();
       } else if (near && !inTaxi) {
@@ -100,7 +111,7 @@ export function updateMission(S, rng, dt, audio) {
     if (m.stage === 0 && near) {
       m.stage = 1; addMoney(S, 200, 'bank cash grabbed');
       raiseWanted(S, 3, 'The bank job is on — the SBPD is coming!');
-      setupMissionStage(S, rng);
+      setupMissionStage(S, rng, audio);
       if (audio) audio.siren();
     } else if (m.stage === 1 && near && S.wanted <= 1) {
       completeMission(S, audio);
@@ -112,7 +123,7 @@ export function updateMission(S, rng, dt, audio) {
       m.delivered++; addMoney(S, 80, 'drop delivered');
       if (audio) audio.cash();
       if (m.delivered >= 3) completeMission(S, audio);
-      else { m.stage++; setupMissionStage(S, rng); }
+      else { m.stage++; setupMissionStage(S, rng, audio); }
     }
   }
 }
@@ -199,6 +210,13 @@ export function saveGame(S) {
       missionIndex: S.mission.index, missionsDone: S.stats.missionsDone,
       carsStolen: S.stats.carsStolen, cashEarned: S.stats.cashEarned,
       day: S.day, stashGot: S.stashGot, stunts: S.stats.stunts,
+      // Round 3: race best times and turf income survive a reload.
+      raceBest: S.race ? S.race.best : {},
+      racesWon: S.race ? S.race.won : 0,
+      turfEarned: S.turf ? S.turf.earned : 0,
+      turfCaptured: S.turf ? S.turf.captured : 0,
+      challengesClaimed: S.daily ? S.daily.claimed : {},
+      challengesDay: S.daily ? S.daily.day : 0,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     addMessage(S, 'Game saved.');
@@ -218,6 +236,11 @@ export function loadGame(S) {
     S.day = d.day || 1;
     S.stashGot = d.stashGot || 0;
     S.stats.stunts = d.stunts || 0;
+    // Round 3 save fields (older saves simply lack them).
+    if (S.race) { S.race.best = d.raceBest || {}; S.race.won = d.racesWon || 0; }
+    if (S.turf) { S.turf.earned = d.turfEarned || 0; S.turf.captured = d.turfCaptured || 0; }
+    // Round 3 challenge progress (same-day saves keep claimed challenges).
+    if (S.daily && d.challengesDay === S.daily.day) S.daily.claimed = d.challengesClaimed || {};
     addMessage(S, 'Save loaded. Welcome back to Solmar Bay.');
     return true;
   } catch { addMessage(S, 'Save could not be read.'); return false; }

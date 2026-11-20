@@ -6,6 +6,7 @@ import { addMessage, addMoney } from './state.js';
 import { hurtEnemy, raiseWanted, spawnBlood } from './player.js';
 import { damageCar } from './vehicles.js';
 import { STASH_TOTAL, STASH_REWARD } from './config.js';
+import { applyStreetPickup } from './streetlife.js';
 
 export function spawnGang(S, rng, x, y, n) {
   for (let i = 0; i < n; i++) {
@@ -111,6 +112,15 @@ export function updatePickups(S, dt, audio) {
         addMoney(S, STASH_REWARD, `stash ${S.stashGot}/${S.stashTotal} found`);
         if (S.stashGot >= S.stashTotal) addMessage(S, 'All stash found — Vera owes you a drink.');
         if (audio) audio.stash();
+      }
+      // Round 3 pickups: wrench, coffee and briefcase (see streetlife.js).
+      else if (pk.kind === 'briefcase') {
+        addMoney(S, pk.value, 'briefcase found');
+        if (audio) audio.cash();
+      } else if (pk.kind === 'wrench' || pk.kind === 'coffee') {
+        const msg = applyStreetPickup(S, pk, audio);
+        if (msg) addMessage(S, msg);
+        if (audio) audio.pickup();
       }
       S.pickups.splice(i, 1);
     }

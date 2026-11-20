@@ -30,8 +30,11 @@ export const CAR_TYPES = {
   // Round 2: two new rides — a nimble street bike and a heavy V8 muscle car.
   bike:   { name: 'Street Bike',   color: '#f97316', top: 440, accel: 420, grip: 4.6, len: 36, wid: 14 },
   muscle: { name: 'V8 Muscle',     color: '#7c3aed', top: 400, accel: 340, grip: 3.6, len: 50, wid: 24 },
+  // Round 3: a long limo for the hotel crowd and a pickup for the docks.
+  limo:   { name: 'Bay Limo',      color: '#1f2937', top: 300, accel: 220, grip: 3.0, len: 62, wid: 24 },
+  pickup: { name: 'Docks Pickup',  color: '#0e7490', top: 320, accel: 240, grip: 3.2, len: 52, wid: 24 },
 };
-export const CAR_TYPE_KEYS = ['sedan', 'taxi', 'truck', 'sports', 'van', 'bike', 'muscle'];
+export const CAR_TYPE_KEYS = ['sedan', 'taxi', 'truck', 'sports', 'van', 'bike', 'muscle', 'limo', 'pickup'];
 
 export const PED_NAMES = ['Mara', 'Jules', 'Tomas', 'Priya', 'Leo', 'Ana', 'Kai', 'Rosa', 'Felix', 'Nina'];
 export const PED_SHIRTS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#fd79a8'];
@@ -70,6 +73,12 @@ export const MISSION_DEFS = [
   { id: 6, title: 'The Last Delivery', reward: 600,
     briefing: 'Vera: "One last run, Rook. Three drops, one clock, and the whole SBPD already on your tail. Don\'t get cute — get it done."',
     hint: 'Deliver to 3 stops before the timer ends — the cops are already chasing you.' },
+  { id: 7, title: 'Vera\'s Escort', reward: 800,
+    briefing: 'Vera: "I\'m moving across town and the Vipers know it. Meet me at the Plaza, ride my bumper, and keep my car in one piece."',
+    hint: 'Meet Vera at the Plaza, then stay close while she drives hotel, pier, safehouse.' },
+  { id: 8, title: 'The Vault Job', reward: 1200,
+    briefing: 'Vera: "The big one, Rook. Crack the Bay Bank vault while the alarm screams, then run for the Safehouse with every cop in the city behind you."',
+    hint: 'Reach the bank, hold it while the vault cracks, then reach the Safehouse cold.' },
 ];
 
 export const START_MONEY = 120;
