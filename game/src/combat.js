@@ -1,10 +1,11 @@
-// combat.js — shooting, drive-bys, gang enemies and pickups.
+// combat.js — shooting, drive-bys, gang enemies, pickups and hidden stash.
 // One job: violence and its rewards.
 import { dist, angleTo } from './random.js';
-import { circleHitsBuilding } from './city.js';
+import { circleHitsBuilding, sidewalkPoint } from './city.js';
 import { addMessage, addMoney } from './state.js';
 import { hurtEnemy, raiseWanted, spawnBlood } from './player.js';
 import { damageCar } from './vehicles.js';
+import { STASH_TOTAL, STASH_REWARD } from './config.js';
 
 export function spawnGang(S, rng, x, y, n) {
   for (let i = 0; i < n; i++) {
@@ -20,6 +21,7 @@ export function fireBullet(S, fromX, fromY, angle, fromPlayer, audio) {
   if (fromPlayer) {
     if (S.player.ammo <= 0) { addMessage(S, 'Out of ammo — find an ammo pickup (green box).'); return; }
     S.player.ammo--; S.stats.shotsFired++;
+    S.gunfireT = S.time; // nearby peds hear the shot and run
   }
   S.bullets.push({ x: fromX, y: fromY, angle, speed: 900, life: 0.9, fromPlayer });
   if (audio) audio.shoot();
@@ -36,7 +38,14 @@ export function updateBullets(S, dt, audio) {
     b.x += Math.cos(b.angle) * b.speed * dt;
     b.y += Math.sin(b.angle) * b.speed * dt;
     b.life -= dt;
-    let hit = b.life <= 0 || circleHitsBuilding(S.city, b.x, b.y, 2);
+    const wallHit = circleHitsBuilding(S.city, b.x, b.y, 2);
+    let hit = b.life <= 0 || wallHit;
+    if (wallHit) {
+      // Sparks where the bullet bites the wall.
+      for (let s = 0; s < 3; s++) {
+        S.particles.push({ x: b.x, y: b.y, vx: (Math.random() - 0.5) * 120, vy: (Math.random() - 0.5) * 120, life: 0.25, max: 0.25, color: '#ffe066', size: 2 });
+      }
+    }
     if (b.fromPlayer) {
       for (const e of S.enemies) {
         if (!e.dead && dist(b.x, b.y, e.x, e.y) < 18) { hurtEnemy(S, e, 34, audio); hit = true; break; }
@@ -89,7 +98,7 @@ export function updateEnemies(S, dt, audio) {
   S.enemies = S.enemies.filter((e) => !e.dead || (e.deadT = (e.deadT || 0) + dt) < 4);
 }
 
-export function updatePickups(S, dt) {
+export function updatePickups(S, dt, audio) {
   for (let i = S.pickups.length - 1; i >= 0; i--) {
     const pk = S.pickups[i];
     pk.bob = (pk.bob || 0) + dt;
@@ -97,6 +106,12 @@ export function updatePickups(S, dt) {
       if (pk.kind === 'cash') { addMoney(S, pk.value, 'package cash'); }
       else if (pk.kind === 'health') { S.player.health = Math.min(100, S.player.health + 40); addMessage(S, 'Health +40'); }
       else if (pk.kind === 'ammo') { S.player.ammo += 30; addMessage(S, 'Ammo +30'); }
+      else if (pk.kind === 'stash') {
+        S.stashGot++;
+        addMoney(S, STASH_REWARD, `stash ${S.stashGot}/${S.stashTotal} found`);
+        if (S.stashGot >= S.stashTotal) addMessage(S, 'All stash found — Vera owes you a drink.');
+        if (audio) audio.stash();
+      }
       S.pickups.splice(i, 1);
     }
   }
@@ -110,4 +125,14 @@ export function spawnPickups(S, rng, n) {
     S.pickups.push({ x: tx * 48 + 24, y: ty * 48 + 24, kind, value: kind === 'cash' ? 50 : 0, bob: 0 });
   }
   S.collect.total = S.pickups.filter((p) => p.kind === 'cash').length;
+}
+
+// Vera's hidden stash: gold drops tucked on pavements across the city.
+// Finding one pays $100; the HUD tracks how many are left.
+export function spawnStash(S, rng, n) {
+  const count = n || STASH_TOTAL;
+  for (let i = 0; i < count; i++) {
+    const p = sidewalkPoint(rng, S.city);
+    S.pickups.push({ x: p.x, y: p.y, kind: 'stash', value: STASH_REWARD, bob: rng.range(0, 6) });
+  }
 }

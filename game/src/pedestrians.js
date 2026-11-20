@@ -13,6 +13,9 @@ export function spawnPeds(S, rng, n) {
       speed: rng.range(28, 52), name: rng.pick(PED_NAMES),
       shirt: rng.pick(PED_SHIRTS), hp: 100, flee: 0,
       target: null, panic: 0, walkPhase: rng.range(0, 6),
+      // Round 2: a quarter of peds stand around chatting instead of walking,
+      // so the pavements feel lived-in rather than endlessly marching.
+      idle: rng.chance(0.25) ? rng.range(4, 12) : 0,
     });
   }
 }
@@ -22,16 +25,25 @@ export function updatePeds(S, rng, dt) {
   for (const ped of S.peds) {
     if (ped.hp <= 0) continue;
     ped.walkPhase += dt * 6;
-    // Flee from the player when they are violent or too close in a car.
+    // Flee from the player when they are violent or too close in a car,
+    // and from recent gunfire nearby — a shot sends the whole block running.
     const pd = dist(ped.x, ped.y, px, py);
     const car = S.player.inCar;
-    if ((car && Math.abs(car.speed) > 120 && pd < 130) || ped.flee > 0 || S.rampage.active) {
+    const gunfireNear = S.time - S.gunfireT < 1.5 && pd < 260;
+    if ((car && Math.abs(car.speed) > 120 && pd < 130) || ped.flee > 0 || S.rampage.active || gunfireNear) {
       ped.flee = Math.max(ped.flee, 1.5);
+      ped.idle = 0;
       const away = angleTo(px, py, ped.x, ped.y);
       ped.angle = away;
       const nx = ped.x + Math.cos(away) * 120 * dt, ny = ped.y + Math.sin(away) * 120 * dt;
       if (!circleHitsBuilding(S.city, nx, ny, 10)) { ped.x = nx; ped.y = ny; }
       ped.flee -= dt;
+      continue;
+    }
+    // Chatting peds stand still, facing a random direction, until idle ends.
+    if (ped.idle > 0) {
+      ped.idle -= dt;
+      ped.walkPhase += dt * 0.5;
       continue;
     }
     if (!ped.target || dist(ped.x, ped.y, ped.target.x, ped.target.y) < 24) {

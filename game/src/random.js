@@ -18,7 +18,24 @@ export function makeRng(seed) {
     int(min, max) { return Math.floor(min + next() * (max - min + 1)); },
     pick(arr) { return arr[Math.floor(next() * arr.length)]; },
     chance(p) { return next() < p; },
+    // Weighted pick from [value, weight] pairs — used for traffic mix and weather.
+    pickWeighted(pairs) {
+      let total = 0;
+      for (const [, w] of pairs) total += w;
+      let roll = next() * total;
+      for (const [v, w] of pairs) { roll -= w; if (roll <= 0) return v; }
+      return pairs[pairs.length - 1][0];
+    },
   };
+}
+
+// Fisher–Yates shuffle (unseeded: for runtime variety, never for city layout).
+export function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 export function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }

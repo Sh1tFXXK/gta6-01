@@ -19,13 +19,19 @@ function baseScene(S, rng) {
   S.pickups.push({ x: 24 * TILE, y: 20 * TILE, kind: 'cash', value: 50, bob: 0 });
   S.pickups.push({ x: 26 * TILE, y: 20 * TILE, kind: 'health', value: 0, bob: 0 });
   S.pickups.push({ x: 28 * TILE, y: 20 * TILE, kind: 'ammo', value: 0, bob: 0 });
+  // A stash drop in view, so the shot shows the new collectible too.
+  S.pickups.push({ x: 22 * TILE, y: 22 * TILE, kind: 'stash', value: 100, bob: 0 });
+  // Clear morning light for every shot — no night veil, no rain.
+  S.weather = { kind: 'clear', t: 60, intensity: 0 };
 }
 
 // A few traffic cars on the same road near (x, y), so the shot shows traffic.
+// Kept well clear of the HUD panels: the first car starts 320px ahead, so
+// no taxi ever sits half-hidden under the top-left status panel.
 function nearbyTraffic(S, x, y, angle, n) {
   const types = ['sedan', 'taxi', 'truck', 'van'];
   for (let i = 0; i < n; i++) {
-    const along = 180 + i * 170;
+    const along = 320 + i * 170;
     const c = makeCar(x + Math.cos(angle) * along, y + Math.sin(angle) * along, angle, types[i % types.length], 'traffic');
     c.speed = 110 + i * 20; c.cruise = 130;
     S.cars.push(c);
@@ -44,6 +50,7 @@ export function applyShot(S, name, rng) {
   const P = S.city.places;
   if (name === 'drive') {
     // Player driving a sports car down a main road, traffic ahead, HUD + minimap on.
+    // A stunt ramp sits 7 tiles ahead on this road — the autopilot crosses it.
     const car = makeCar(17 * TILE, 25 * TILE, 0, 'sports', 'player');
     car.speed = 260;
     S.cars.push(car);

@@ -1,9 +1,9 @@
 // vehicles.js — cars: traffic AI, the player's driving, collisions and damage.
-// One job: everything with four wheels.
-import { TILE, CITY_SIZE, CAR_TYPES, CAR_TYPE_KEYS } from './config.js';
+// One job: everything with four wheels (and the odd two).
+import { TILE, CITY_SIZE, CAR_TYPES, CAR_TYPE_KEYS, STUNT_MIN_SPEED, STUNT_REWARD } from './config.js';
 import { clamp, dist, angleDiff, angleTo } from './random.js';
 import { isRoadTile, roadPoint, buildingAt, circleHitsBuilding } from './city.js';
-import { addMessage } from './state.js';
+import { addMessage, addMoney } from './state.js';
 import { raiseWanted, spawnExplosion } from './player.js';
 
 let carId = 1;
@@ -15,6 +15,10 @@ export function makeCar(x, y, angle, typeKey, driver) {
     len: t.len, wid: t.wid, driver: driver || null, parked: !driver,
     hp: 100, smoke: 0, dead: false, target: null, stuck: 0,
     dir: angle, cruise: 90 + Math.random() * 60, brake: false,
+    // Round 2: each traffic car holds its own lane offset, so the road
+    // does not look like a single-file convoy.
+    lane: Math.round((Math.random() * 28 - 14) / 2) * 2,
+    braking: false, honkCd: 0,
   };
 }
 
@@ -38,6 +42,7 @@ export function spawnParkedCars(S, rng, n) {
 }
 
 // Steer a traffic car along roads: pick a random road junction ahead as target.
+// The target is shifted sideways by the car's lane offset.
 function pickTrafficTarget(S, c, rng) {
   const tx = Math.floor(c.x / TILE), ty = Math.floor(c.y / TILE);
   const ahead = 5;
@@ -48,25 +53,42 @@ function pickTrafficTarget(S, c, rng) {
   if (isRoadTile(tx, ty - ahead)) dirs.push(-Math.PI / 2);
   const d = dirs.length ? rng.pick(dirs) : c.angle;
   const L = 260;
-  c.target = { x: c.x + Math.cos(d) * L, y: c.y + Math.sin(d) * L };
+  const px = -Math.sin(d) * (c.lane || 0), py = Math.cos(d) * (c.lane || 0);
+  c.target = { x: c.x + Math.cos(d) * L + px, y: c.y + Math.sin(d) * L + py };
 }
 
-export function updateTraffic(S, rng, dt) {
+export function updateTraffic(S, rng, dt, audio) {
   for (const c of S.cars) {
     if (c.driver !== 'traffic' || c.dead) continue;
+    c.honkCd = Math.max(0, (c.honkCd || 0) - dt);
     if (!c.target || dist(c.x, c.y, c.target.x, c.target.y) < 60) pickTrafficTarget(S, c, rng);
     const want = angleTo(c.x, c.y, c.target.x, c.target.y);
     const diff = angleDiff(c.angle, want);
     c.angle += clamp(diff, -1.8 * dt, 1.8 * dt);
-    // Slow for the car ahead.
-    let slow = false;
+    // Slow for the car ahead — and brake hard if it has stopped.
+    let slow = false, stopped = false;
     for (const o of S.cars) {
       if (o === c || o.dead) continue;
       const d = dist(c.x, c.y, o.x, o.y);
-      if (d < 70 && Math.abs(angleDiff(c.angle, angleTo(c.x, c.y, o.x, o.y))) < 0.6) { slow = true; break; }
+      if (d < 70 && Math.abs(angleDiff(c.angle, angleTo(c.x, c.y, o.x, o.y))) < 0.6) {
+        slow = true;
+        if (Math.abs(o.speed) < 20) stopped = true;
+        break;
+      }
     }
-    const targetSpeed = slow ? 0 : c.cruise;
+    // Honk at a player car blocking the road ahead.
+    const pc = S.player.inCar;
+    if (pc && pc !== c && c.honkCd <= 0 && Math.abs(pc.speed) < 30) {
+      const d = dist(c.x, c.y, pc.x, pc.y);
+      if (d < 110 && Math.abs(angleDiff(c.angle, angleTo(c.x, c.y, pc.x, pc.y))) < 0.5) {
+        c.honkCd = 3;
+        if (audio) audio.horn();
+      }
+    }
+    const targetSpeed = stopped ? 0 : slow ? c.cruise * 0.4 : c.cruise;
+    const prevSpeed = c.speed;
     c.speed += clamp(targetSpeed - c.speed, -260 * dt, 140 * dt);
+    c.braking = c.speed < prevSpeed - 1;
     const nx = c.x + Math.cos(c.angle) * c.speed * dt;
     const ny = c.y + Math.sin(c.angle) * c.speed * dt;
     if (!circleHitsBuilding(S.city, nx, ny, 20)) { c.x = nx; c.y = ny; }
@@ -90,6 +112,7 @@ export function updatePlayerCar(S, input, dt, audio) {
   if (Math.abs(car.speed) < 4 && !fwd) car.speed = 0;
   const steerAmt = steer * car.grip * dt * clamp(Math.abs(car.speed) / 90, 0, 1) * (car.speed < 0 ? -1 : 1);
   car.angle += steerAmt * (handbrake ? 1.5 : 1);
+  car.braking = handbrake || fwd < 0;
   const nx = car.x + Math.cos(car.angle) * car.speed * dt;
   const ny = car.y + Math.sin(car.angle) * car.speed * dt;
   if (!circleHitsBuilding(S.city, nx, ny, car.wid / 2 + 4)) { car.x = nx; car.y = ny; }
@@ -99,6 +122,20 @@ export function updatePlayerCar(S, input, dt, audio) {
   }
   car.x = clamp(car.x, 24, CITY_SIZE - 24); car.y = clamp(car.y, 24, CITY_SIZE - 24);
   p.x = car.x; p.y = car.y; p.angle = car.angle;
+  // Stunt jumps: cross a ramp fast and it pays out, with a short cooldown
+  // per ramp so one ramp cannot be farmed by driving in circles.
+  for (const r of S.city.ramps) {
+    r.cd = Math.max(0, r.cd - dt);
+    if (r.cd <= 0 && Math.abs(car.speed) > STUNT_MIN_SPEED && dist(car.x, car.y, r.x, r.y) < 46) {
+      r.cd = 3;
+      S.stats.stunts++;
+      S.mission.banner = `STUNT JUMP!  +$${STUNT_REWARD}`;
+      S.mission.bannerT = 2.5;
+      addMoney(S, STUNT_REWARD, 'stunt jump');
+      spawnExplosion(S, r.x, r.y, 0.35);
+      if (audio) audio.stunt();
+    }
+  }
   // Exhaust puffs.
   if (Math.abs(car.speed) > 40 && Math.random() < 0.3) {
     S.particles.push({

@@ -1,6 +1,6 @@
 // main.js — the game loop and state machine for Solmar Nights.
 // One job: wire every module together and run the game.
-import { VIEW_W, VIEW_H, CITY_SIZE, TILE } from './config.js';
+import { VIEW_W, VIEW_H, CITY_SIZE, TILE, MISSION_DEFS } from './config.js';
 import { makeRng, clamp } from './random.js';
 import { createState, addMessage } from './state.js';
 import { createInput } from './input.js';
@@ -9,7 +9,7 @@ import { updatePlayerOnFoot, exitCar, tryEnterCar, raiseWanted } from './player.
 import { spawnTraffic, spawnParkedCars, updateTraffic, updatePlayerCar, collideCars } from './vehicles.js';
 import { spawnPeds, updatePeds } from './pedestrians.js';
 import { updatePolice } from './police.js';
-import { fireBullet, updateBullets, updateEnemies, updatePickups, spawnPickups } from './combat.js';
+import { fireBullet, updateBullets, updateEnemies, updatePickups, spawnPickups, spawnStash } from './combat.js';
 import { nextMission, updateMission, startRampage, updateRampage, startTaxiFare, updateTaxiFare, saveGame, loadGame } from './missions.js';
 import { drawHUD, drawMinimap } from './hud.js';
 import { drawWorld, drawTitle, drawPause, drawEndScreen, drawMissionDone } from './render.js';
@@ -35,6 +35,7 @@ spawnTraffic(S, rng, 16);
 spawnParkedCars(S, rng, 12);
 spawnPeds(S, rng, 26);
 spawnPickups(S, rng, 12);
+spawnStash(S, rng);
 S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
 S.player.x = 21 * TILE; S.player.y = 21 * TILE;
 
@@ -55,6 +56,7 @@ function restart() {
   Object.keys(S).forEach((k) => delete S[k]);
   Object.assign(S, fresh);
   spawnTraffic(S, rng, 16); spawnParkedCars(S, rng, 12); spawnPeds(S, rng, 26); spawnPickups(S, rng, 12);
+  spawnStash(S, rng);
   S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
   S.screen = 'play';
 }
@@ -66,6 +68,24 @@ function updateCamera(dt) {
   S.cam.y += (ty - S.cam.y) * Math.min(1, dt * 5);
   S.cam.shake = Math.max(0, S.cam.shake - dt * 30);
   S.flash = Math.max(0, S.flash - dt);
+}
+
+// Weather: clear skies, then rain showers roll in and out on their own timer.
+// The first change comes after ~50 seconds, so screenshot scenes stay dry.
+function updateWeather(dt, audio) {
+  const w = S.weather;
+  w.t -= dt;
+  if (w.t <= 0) {
+    const raining = Math.random() < 0.4;
+    w.kind = raining ? 'rain' : 'clear';
+    w.t = 40 + Math.random() * 50;
+    w.intensity = raining ? 0.6 + Math.random() * 0.4 : 0;
+    if (audio) audio.setRain(raining);
+    if (raining) {
+      addMessage(S, 'Rain rolling in over Solmar Bay.');
+      if (audio && Math.random() < 0.5) audio.thunder();
+    }
+  }
 }
 
 function autopilotDrive(S, dt) {
@@ -83,7 +103,8 @@ function autopilotDrive(S, dt) {
 function step(dt) {
   S.time += dt;
   S.clockMin += dt * 0.6; // a game hour every ~100 real seconds
-  if (S.clockMin >= 1440) S.clockMin -= 1440;
+  if (S.clockMin >= 1440) { S.clockMin -= 1440; S.day++; addMessage(S, `Day ${S.day} in Solmar Bay.`); }
+  updateWeather(dt, audio);
   for (const m of S.messages) m.t -= dt;
   S.messages = S.messages.filter((m) => m.t > 0);
   for (let i = S.particles.length - 1; i >= 0; i--) {
@@ -100,6 +121,7 @@ function step(dt) {
   if (input.consume('n')) nextMission(S, rng, audio);
   if (input.consume('r')) startRampage(S, audio);
   if (input.consume('t')) startTaxiFare(S, rng);
+  if (input.consume('g') && S.player.inCar) audio.horn();
   if (S.player.inCar && input.consume('e')) exitCar(S);
   if (S.autopilot) autopilotDrive(S, dt);
   if (S.player.inCar) updatePlayerCar(S, input, dt, audio);
@@ -114,12 +136,12 @@ function step(dt) {
     S.player.shootCd = fromCar ? 0.28 : 0.22;
     if (S.wanted < 1 && Math.random() < 0.3) { S.wanted = 1; S.wantedHeat = 1; addMessage(S, 'Shots fired — someone called the SBPD!'); }
   }
-  updateTraffic(S, rng, dt);
+  updateTraffic(S, rng, dt, audio);
   updatePeds(S, rng, dt);
   updatePolice(S, rng, dt, audio);
   updateBullets(S, dt, audio);
   updateEnemies(S, dt, audio);
-  updatePickups(S, dt);
+  updatePickups(S, dt, audio);
   updateMission(S, rng, dt, audio);
   updateRampage(S, dt, audio);
   updateTaxiFare(S, dt, audio);
@@ -128,7 +150,7 @@ function step(dt) {
   if (S.cars.filter((c) => c.driver === 'traffic').length < 10) spawnTraffic(S, rng, 4);
   if (S.peds.length < 16) spawnPeds(S, rng, 6);
   updateCamera(dt);
-  if (S.screen === 'play' && S.mission.index >= 5 && !S.mission.active && S.stats.missionsDone >= 5) {
+  if (S.screen === 'play' && S.mission.index >= MISSION_DEFS.length && !S.mission.active && S.stats.missionsDone >= MISSION_DEFS.length) {
     S.screen = 'storyDone';
   }
 }

@@ -5,6 +5,9 @@ export function createInput(canvas) {
   const pressed = {}; // edge-triggered keys, consumed by the game each frame
   window.addEventListener('keydown', (e) => {
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+    // Held keys auto-repeat: only the first press counts as an edge trigger,
+    // so one tap of N or E never fires twice.
+    if (e.repeat) return;
     if (!keys[e.key.toLowerCase()]) pressed[e.key.toLowerCase()] = true;
     keys[e.key.toLowerCase()] = true;
   });
@@ -21,6 +24,11 @@ export function createInput(canvas) {
     keys, mouse, pressed,
     down(...names) { return names.some((n) => keys[n]); },
     consume(name) { const v = !!pressed[name]; pressed[name] = false; return v; },
+    // Consume the first of several keys that was pressed this frame.
+    consumeAny(...names) {
+      for (const n of names) { if (pressed[n]) { pressed[n] = false; return n; } }
+      return null;
+    },
     endFrame() { for (const k in pressed) pressed[k] = false; mouse.clicked = false; },
   };
 }

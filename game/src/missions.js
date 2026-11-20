@@ -18,6 +18,11 @@ export function startMission(S, rng, audio) {
   m.banner = `MISSION: ${def.title}`; m.bannerT = 4;
   addMessage(S, def.briefing);
   if (audio) audio.missionOk();
+  // Mission 6 starts hot: the SBPD is already on you when the clock starts.
+  if (m.index === 5) {
+    raiseWanted(S, 2, 'The SBPD is already on your tail — move!');
+    m.timer = 150;
+  }
   setupMissionStage(S, rng);
 }
 
@@ -44,6 +49,10 @@ export function setupMissionStage(S, rng) {
   } else if (m.index === 4) {
     if (m.stage === 0) setTarget(S, P.bank, 'Go to Bay Bank and grab the cash');
     else if (m.stage === 1) setTarget(S, P.safehouse, 'Lose the cops — reach the Safehouse!');
+  } else if (m.index === 5) {
+    // The Last Delivery: three drops on one clock, cops already chasing.
+    const stops = [P.gas, P.pier, P.hotel];
+    setTarget(S, stops[m.stage], `Drop ${m.stage + 1} of 3 — ${stops[m.stage].label} (${Math.ceil(m.timer)}s left)`);
   }
 }
 
@@ -53,7 +62,10 @@ export function updateMission(S, rng, dt, audio) {
   if (m.bannerT > 0) m.bannerT -= dt;
   if (m.timer > 0) {
     m.timer -= dt;
-    if (m.timer <= 0 && m.index === 2) return failMission(S, 'The fare got tired of waiting.', audio);
+    if (m.timer <= 0) {
+      if (m.index === 2) return failMission(S, 'The fare got tired of waiting.', audio);
+      if (m.index === 5) return failMission(S, 'Out of time — the drops went cold.', audio);
+    }
   }
   const t = m.target;
   if (!t) return;
@@ -95,6 +107,13 @@ export function updateMission(S, rng, dt, audio) {
     } else if (m.stage === 1 && near) {
       m.objective = 'Too hot! Lose the cops first (get wanted to 1★ or less), then reach the Safehouse.';
     }
+  } else if (m.index === 5) {
+    if (near) {
+      m.delivered++; addMoney(S, 80, 'drop delivered');
+      if (audio) audio.cash();
+      if (m.delivered >= 3) completeMission(S, audio);
+      else { m.stage++; setupMissionStage(S, rng); }
+    }
   }
 }
 
@@ -103,7 +122,9 @@ export function completeMission(S, audio) {
   S.mission.active = false; S.mission.done = true;
   S.mission.banner = `MISSION COMPLETE: ${def.title}  +$${def.reward}`;
   S.mission.bannerT = 5;
-  S.mission.objective = 'Mission complete! Press N for the next mission.';
+  S.mission.objective = S.mission.index >= MISSION_DEFS.length - 1
+    ? 'Story complete! Free roam Solmar Bay — find the stash, hit the ramps.'
+    : 'Mission complete! Press N for the next mission.';
   addMoney(S, def.reward, def.title);
   S.stats.missionsDone++;
   if (audio) audio.missionOk();
@@ -124,7 +145,7 @@ export function nextMission(S, rng, audio) {
   const def = currentMissionDef(S);
   if (!def) {
     S.mission.objective = 'All story missions complete — free roam Solmar Bay!';
-    addMessage(S, 'You finished the story! Free roam, collect cash, start a rampage (R).');
+    addMessage(S, 'You finished the story! Free roam, collect the stash (◆), hit a ramp, start a rampage (R).');
     return;
   }
   startMission(S, rng, audio);
@@ -177,6 +198,7 @@ export function saveGame(S) {
       x: S.player.x, y: S.player.y, wanted: S.wanted,
       missionIndex: S.mission.index, missionsDone: S.stats.missionsDone,
       carsStolen: S.stats.carsStolen, cashEarned: S.stats.cashEarned,
+      day: S.day, stashGot: S.stashGot, stunts: S.stats.stunts,
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     addMessage(S, 'Game saved.');
@@ -193,6 +215,9 @@ export function loadGame(S) {
     S.stats.missionsDone = d.missionsDone || 0;
     S.stats.carsStolen = d.carsStolen || 0;
     S.stats.cashEarned = d.cashEarned || 0;
+    S.day = d.day || 1;
+    S.stashGot = d.stashGot || 0;
+    S.stats.stunts = d.stunts || 0;
     addMessage(S, 'Save loaded. Welcome back to Solmar Bay.');
     return true;
   } catch { addMessage(S, 'Save could not be read.'); return false; }

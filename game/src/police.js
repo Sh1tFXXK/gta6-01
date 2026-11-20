@@ -58,10 +58,16 @@ export function updatePolice(S, rng, dt, audio) {
     for (const c of S.copCars) { c.driver = null; c.parked = true; }
     S.copCars = S.copCars.filter((c) => c.driver === 'cop');
   }
+  // Round 2: cop cars steer at where the player WILL be, not where they are —
+  // at wanted 3+ they cut the corner, so outrunning them takes real driving.
+  const pc = S.player.inCar;
+  const pvx = pc ? Math.cos(pc.angle) * pc.speed : 0;
+  const pvy = pc ? Math.sin(pc.angle) * pc.speed : 0;
+  const lead = S.wanted >= 3 ? 0.55 : 0.2;
   // Cop cars chase the player and ram.
   for (const c of S.copCars) {
     if (c.dead || c.driver !== 'cop') continue;
-    const want = angleTo(c.x, c.y, S.player.x, S.player.y);
+    const want = angleTo(c.x, c.y, S.player.x + pvx * lead, S.player.y + pvy * lead);
     const diff = angleDiff(c.angle, want);
     c.angle += clamp(diff, -2.6 * dt, 2.6 * dt);
     const targetSpeed = S.wanted >= 3 ? c.top * 0.95 : c.top * 0.8;
@@ -71,7 +77,6 @@ export function updatePolice(S, rng, dt, audio) {
     if (!circleHitsBuilding(S.city, nx, ny, 20)) { c.x = nx; c.y = ny; }
     else { c.speed *= 0.4; }
     // Ram the player's car.
-    const pc = S.player.inCar;
     if (pc && dist(c.x, c.y, pc.x, pc.y) < 55) {
       damageCar(S, pc, 6 * dt * 4, audio);
       if (Math.random() < dt * 0.5 && audio) audio.siren();

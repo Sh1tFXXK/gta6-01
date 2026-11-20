@@ -17,6 +17,7 @@ export const COLORS = {
   buildingRoof3: '#8a5fc9', buildingRoof4: '#e0a83c', wall: '#8d9099',
   hudBg: 'rgba(8,12,20,0.72)', hudText: '#ffffff', accent: '#ffd23f',
   danger: '#ff4d4d', good: '#57e389', policeBlue: '#3b82f6', policeRed: '#ef4444',
+  stashGold: '#ffd23f', rampYellow: '#ffe066', nightTint: 'rgba(8,10,40,0.38)',
 };
 
 export const CAR_TYPES = {
@@ -26,14 +27,28 @@ export const CAR_TYPES = {
   sports: { name: 'Comet GT',      color: '#e33fa1', top: 470, accel: 380, grip: 4.2, len: 48, wid: 22 },
   police: { name: 'SBPD Cruiser',  color: '#24344d', top: 420, accel: 340, grip: 3.9, len: 48, wid: 23 },
   van:    { name: 'Pier Van',      color: '#e8e8e8', top: 290, accel: 210, grip: 2.9, len: 52, wid: 24 },
+  // Round 2: two new rides — a nimble street bike and a heavy V8 muscle car.
+  bike:   { name: 'Street Bike',   color: '#f97316', top: 440, accel: 420, grip: 4.6, len: 36, wid: 14 },
+  muscle: { name: 'V8 Muscle',     color: '#7c3aed', top: 400, accel: 340, grip: 3.6, len: 50, wid: 24 },
 };
-export const CAR_TYPE_KEYS = ['sedan', 'taxi', 'truck', 'sports', 'van'];
+export const CAR_TYPE_KEYS = ['sedan', 'taxi', 'truck', 'sports', 'van', 'bike', 'muscle'];
 
 export const PED_NAMES = ['Mara', 'Jules', 'Tomas', 'Priya', 'Leo', 'Ana', 'Kai', 'Rosa', 'Felix', 'Nina'];
 export const PED_SHIRTS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#fd79a8'];
 export const GANG_NAME = 'The Rust Vipers';
 export const CONTACT_NAME = 'Vera Solano';
 export const PLAYER_NAME = 'Rook Marlow';
+
+// Hidden stash: Vera's cash drops scattered around Solmar Bay. Find them all.
+export const STASH_TOTAL = 10;
+export const STASH_REWARD = 100;
+// Stunt jumps: hit a ramp faster than this and the jump pays out.
+export const STUNT_MIN_SPEED = 200;
+export const STUNT_REWARD = 75;
+// Sprint stamina: drains while holding Shift, refills while walking.
+export const STAMINA_MAX = 100;
+export const STAMINA_DRAIN = 22;
+export const STAMINA_REGEN = 14;
 
 // Story mission chain (id, title, briefing, reward). Objectives are scripted in missions.js.
 export const MISSION_DEFS = [
@@ -52,6 +67,9 @@ export const MISSION_DEFS = [
   { id: 5, title: 'The Big Score', reward: 1000,
     briefing: 'Vera: "Last one, Rook. Grab the cash at the bank, then lose the cops and get to the safehouse. Make Solmar yours."',
     hint: 'Grab the cash, survive wanted level 3, reach the safehouse.' },
+  { id: 6, title: 'The Last Delivery', reward: 600,
+    briefing: 'Vera: "One last run, Rook. Three drops, one clock, and the whole SBPD already on your tail. Don\'t get cute — get it done."',
+    hint: 'Deliver to 3 stops before the timer ends — the cops are already chasing you.' },
 ];
 
 export const START_MONEY = 120;

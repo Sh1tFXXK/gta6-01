@@ -53,6 +53,14 @@ export function buildCity(seed) {
       if (b.x < p.x + p.w && b.x + b.w > p.x && b.y < p.y + p.h && b.y + b.h > p.y) buildings.splice(i, 1);
     }
   }
+  // Stunt ramps: fixed spots on road intersections. Hit one fast and it pays.
+  // Each sits on a road tile (tx % 8 < 2 and ty % 8 < 2) so cars can reach it.
+  const ramps = [
+    { x: 24 * TILE, y: 25 * TILE, label: 'JUMP', cd: 0 },
+    { x: 40 * TILE, y: 17 * TILE, label: 'JUMP', cd: 0 },
+    { x: 16 * TILE, y: 41 * TILE, label: 'JUMP', cd: 0 },
+    { x: 48 * TILE, y: 49 * TILE, label: 'JUMP', cd: 0 },
+  ];
   // Named places: fixed, road-adjacent, used by missions and the minimap.
   const places = {
     docks:     { x: 57 * TILE, y: 53 * TILE, label: 'Docks' },
@@ -63,8 +71,9 @@ export function buildCity(seed) {
     safehouse: { x: 10 * TILE, y: 50 * TILE, label: 'Safehouse' },
     hospital:  { x: 50 * TILE, y: 10 * TILE, label: 'Hospital' },
     gas:       { x: 34 * TILE, y: 50 * TILE, label: 'Gas Station' },
+    pier:      { x: 57 * TILE, y: 10 * TILE, label: 'Pier' },
   };
-  return { seed, buildings, parks, plazas, places, rng };
+  return { seed, buildings, parks, plazas, places, ramps, rng };
 }
 
 export function buildingAt(city, x, y) {

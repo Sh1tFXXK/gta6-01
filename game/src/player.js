@@ -1,6 +1,6 @@
 // player.js — Rook Marlow on foot: walking, aiming, entering and exiting cars.
 // One job: the player character. Driving physics live in vehicles.js.
-import { TILE, CITY_SIZE } from './config.js';
+import { TILE, CITY_SIZE, STAMINA_MAX, STAMINA_DRAIN, STAMINA_REGEN } from './config.js';
 import { clamp, angleTo } from './random.js';
 import { circleHitsBuilding } from './city.js';
 import { addMessage } from './state.js';
@@ -11,12 +11,18 @@ export function updatePlayerOnFoot(S, input, dt, audio) {
   const k = input.keys;
   let mx = (k['d'] || k['arrowright'] ? 1 : 0) - (k['a'] || k['arrowleft'] ? 1 : 0);
   let my = (k['s'] || k['arrowdown'] ? 1 : 0) - (k['w'] || k['arrowup'] ? 1 : 0);
-  const run = k['shift'] ? 1.6 : 1;
+  const moving = !!(mx || my);
+  // Sprint (Shift) is faster but drains stamina; empty stamina means walking
+  // until it refills a little. Stamina refills while walking or standing.
+  const wantSprint = !!k['shift'] && p.stamina > 1;
+  const run = wantSprint ? 1.6 : 1;
+  if (wantSprint && moving) p.stamina = Math.max(0, p.stamina - STAMINA_DRAIN * dt);
+  else p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * dt);
   const len = Math.hypot(mx, my) || 1;
   const spd = 170 * run;
   const nx = p.x + (mx / len) * spd * dt;
   const ny = p.y + (my / len) * spd * dt;
-  if (mx || my) {
+  if (moving) {
     if (!circleHitsBuilding(S.city, nx, p.y, 12)) p.x = nx;
     if (!circleHitsBuilding(S.city, p.x, ny, 12)) p.y = ny;
     p.angle = Math.atan2(my, mx);
@@ -49,9 +55,9 @@ export function tryEnterCar(S, audio) {
   p.inCar = car; car.driver = 'player'; car.parked = false;
   p.x = car.x; p.y = car.y;
   S.stats.carsStolen++;
-  if (car.driverWas !== 'player') raiseWanted(S, 1, 'Car stolen!');
+  if (car.driverWas !== 'player') raiseWanted(S, 1, car.type === 'bike' ? 'Bike stolen!' : 'Car stolen!');
   if (audio) audio.pickup();
-  addMessage(S, `Got in the ${car.typeName}. Drive with W A S D.`);
+  addMessage(S, car.type === 'bike' ? `On the ${car.typeName}. Drive with W A S D.` : `Got in the ${car.typeName}. Drive with W A S D.`);
 }
 
 export function exitCar(S) {

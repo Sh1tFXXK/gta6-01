@@ -1,7 +1,8 @@
 // Solmar Nights — an original open-world crime game in the invented city of
-// Solmar Bay. A 2D top-down game on HTML canvas: steal cars, dodge the SBPD,
-// run five story missions for Vera Solano, and make the city yours. No
-// libraries, no network requests — every file the game loads lives under
+// Solmar Bay. A 2D top-down game on HTML canvas: steal cars and bikes, dodge
+// the SBPD, run six story missions for Vera Solano, hunt 10 hidden stash
+// drops, hit stunt ramps, and watch day turn to night as rain rolls in.
+// No libraries, no network requests — every file the game loads lives under
 // game/. This program hands the game in: it copies game/ and screenshots/
 // from beside this file to /output and writes /output/dossier.json, the
 // summary the judge reads, with the vendored make.fun library.

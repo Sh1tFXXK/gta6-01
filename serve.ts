@@ -65,8 +65,11 @@ createServer((request, response) => {
     'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
     'content-length': size,
     'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
   });
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
+  console.log('Screenshots: ?shot=start | ?shot=drive | ?shot=chase | ?shot=mission (add &seed=1)');
+  console.log('Controls: WASD move/drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi · R rampage');
 });
