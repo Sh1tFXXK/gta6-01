@@ -24,6 +24,8 @@ export const CHALLENGE_POOL = [
   { id: 'turf-lord', name: 'Turf Lord', desc: 'Capture 2 turf zones', stat: 'turfCaptured', target: 2, reward: 350 },
   { id: 'professional', name: 'Professional', desc: 'Finish 3 story missions', stat: 'missionsDone', target: 3, reward: 200 },
   { id: 'legend', name: 'Solmar Legend', desc: 'Finish 6 story missions', stat: 'missionsDone', target: 6, reward: 500 },
+  { id: 'courier', name: 'Courier', desc: 'Finish 2 courier gigs', stat: 'courierDone', target: 2, reward: 150 },
+  { id: 'king', name: 'King of Solmar', desc: 'Capture 4 turf zones', stat: 'turfCaptured', target: 4, reward: 600 },
 ];
 
 // Where each stat lives. Most are plain S.stats fields; the round-3 systems
@@ -33,6 +35,7 @@ export function challengeProgress(S, def) {
     case 'stashGot': return S.stashGot || 0;
     case 'racesWon': return (S.race && S.race.won) || 0;
     case 'turfCaptured': return (S.turf && S.turf.captured) || 0;
+    case 'courierDone': return (S.courier && S.courier.done) || 0;
     default: return (S.stats && S.stats[def.stat]) || 0;
   }
 }

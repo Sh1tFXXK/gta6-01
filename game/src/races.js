@@ -82,6 +82,18 @@ export const RACE_DEFS = [
       { x: 17 * TILE, y: 41 * TILE },
     ],
   },
+  {
+    id: 7, name: 'Sunset Strip', reward: 1500, rivalSpeed: 380,
+    start: { x: 25 * TILE, y: 57 * TILE },
+    checkpoints: [
+      { x: 25 * TILE, y: 41 * TILE },
+      { x: 9 * TILE, y: 41 * TILE },
+      { x: 9 * TILE, y: 17 * TILE },
+      { x: 33 * TILE, y: 17 * TILE },
+      { x: 57 * TILE, y: 17 * TILE },
+      { x: 57 * TILE, y: 49 * TILE },
+    ],
+  },
 ];
 
 // The race state lives on S.race so save/load, the HUD and the renderer can
