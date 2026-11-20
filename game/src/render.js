@@ -6,6 +6,7 @@ import { clamp, lerp } from './random.js';
 import { drawRaces } from './races.js';
 import { drawTerritory } from './territory.js';
 import { challengeBoardText } from './challenges.js';
+import { drawCourier } from './courier.js';
 
 // How dark the night overlay is at a given in-game clock (minutes).
 // Day is clear, dusk and dawn fade in, deep night is a blue 0.38 veil.
@@ -29,6 +30,7 @@ export function drawWorld(ctx, S) {
   drawRamps(ctx, S);
   drawTerritory(ctx, S);
   drawRaces(ctx, S);
+  drawCourier(ctx, S);
   drawPickups(ctx, S);
   drawMissionMarker(ctx, S);
   drawCars(ctx, S);

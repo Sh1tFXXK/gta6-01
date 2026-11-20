@@ -15,6 +15,7 @@ import { initRaces, tryStartRace, updateRaces } from './races.js';
 import { initTerritory, updateTerritory } from './territory.js';
 import { spawnStreetLife, spawnStreetPickups, buyCoffee } from './streetlife.js';
 import { initChallenges, updateChallenges } from './challenges.js';
+import { initCourier, startCourier, updateCourier } from './courier.js';
 import { drawHUD, drawMinimap } from './hud.js';
 import { drawWorld, drawTitle, drawPause, drawEndScreen, drawMissionDone } from './render.js';
 import { applyShot } from './shots.js';
@@ -44,6 +45,7 @@ spawnStash(S, rng);
 initRaces(S); initTerritory(S);
 spawnStreetLife(S, rng); spawnStreetPickups(S, rng, 10);
 initChallenges(S);
+initCourier(S);
 S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
 S.player.x = 21 * TILE; S.player.y = 21 * TILE;
 
@@ -69,6 +71,7 @@ function restart() {
   initRaces(S); initTerritory(S);
   spawnStreetLife(S, rng); spawnStreetPickups(S, rng, 10);
   initChallenges(S);
+  initCourier(S);
   S.mission.objective = 'Press N to start your first mission — Vera has work for you.';
   S.screen = 'play';
 }
@@ -135,6 +138,7 @@ function step(dt) {
   if (input.consume('t')) startTaxiFare(S, rng);
   if (input.consume('v')) tryStartRace(S, rng, audio);
   if (input.consume('b')) buyCoffee(S, audio);
+  if (input.consume('c')) startCourier(S, rng, audio);
   if (input.consume('g') && S.player.inCar) audio.horn();
   if (S.player.inCar && input.consume('e')) exitCar(S);
   if (S.autopilot) autopilotDrive(S, dt);
@@ -163,6 +167,7 @@ function step(dt) {
   updateRaces(S, dt, audio);
   updateTerritory(S, rng, dt, audio);
   updateChallenges(S, dt, audio);
+  updateCourier(S, dt, audio);
   collideCars(S, dt, audio);
   // Respawn traffic / peds that wandered off, keeping the city alive.
   if (S.cars.filter((c) => c.driver === 'traffic').length < 10) spawnTraffic(S, rng, 4);

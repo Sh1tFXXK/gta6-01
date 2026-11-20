@@ -43,6 +43,7 @@ export function createState(seed) {
     race: null,    // set up by initRaces in races.js
     turf: null,    // set up by initTerritory in territory.js
     escort: null,  // Vera's car while mission 7 runs, else null
+    courier: null, // set up by initCourier in courier.js
     street: { racesWon: 0, turfEarned: 0 },
     collect: { total: 0, got: 0 },
     stashGot: 0,     // hidden stash packages found (of STASH_TOTAL)

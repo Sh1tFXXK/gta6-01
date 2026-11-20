@@ -2,6 +2,7 @@
 import { VIEW_W, VIEW_H, TILE, CITY_SIZE, COLORS } from './config.js';
 import { MISSION_DEFS } from './config.js';
 import { challengeHudLines } from './challenges.js';
+import { courierHudLine } from './courier.js';
 
 function fmtClock(min) {
   const h = Math.floor(min / 60) % 24, m = Math.floor(min % 60);
@@ -64,6 +65,12 @@ export function drawHUD(ctx, S) {
       break; // one line fits; the rest wait for the pause screen
     }
   }
+  // Round 3: the active courier gig, with its countdown.
+  if (S.courier && S.courier.active) {
+    ctx.fillStyle = '#e8c87a';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillText(courierHudLine(S), 26, 212);
+  }
   // Mission objective panel (top centre).
   if (S.mission.objective) {
     ctx.font = 'bold 15px system-ui, sans-serif';
@@ -92,7 +99,7 @@ export function drawHUD(ctx, S) {
   // Toast messages (start below the taller status panel — lower still when
   // the race / escort lines are showing, so nothing overlaps).
   ctx.font = '14px system-ui, sans-serif';
-  let y = (S.race && S.race.active) || S.escort ? 200 : 164;
+  let y = (S.race && S.race.active) || S.escort || (S.courier && S.courier.active) ? 224 : 164;
   for (const m of S.messages) {
     ctx.fillStyle = 'rgba(8,12,20,0.65)';
     const w = ctx.measureText(m.text).width + 20;
@@ -112,7 +119,7 @@ export function drawHUD(ctx, S) {
   }
   // Controls reminder (bottom centre, small).
   ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText('WASD move / drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi fare · R rampage · V race · P pause · M mute', VIEW_W / 2, VIEW_H - 8);
+  ctx.fillText('WASD move / drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi fare · R rampage · V race · C courier · P pause · M mute', VIEW_W / 2, VIEW_H - 8);
   ctx.textAlign = 'left';
   ctx.restore();
 }
