@@ -70,6 +70,18 @@ export const RACE_DEFS = [
       { x: 41 * TILE, y: 17 * TILE },
     ],
   },
+  {
+    id: 6, name: 'Viper Alley', reward: 1200, rivalSpeed: 360,
+    start: { x: 17 * TILE, y: 57 * TILE },
+    checkpoints: [
+      { x: 33 * TILE, y: 57 * TILE },
+      { x: 49 * TILE, y: 57 * TILE },
+      { x: 49 * TILE, y: 41 * TILE },
+      { x: 33 * TILE, y: 25 * TILE },
+      { x: 17 * TILE, y: 25 * TILE },
+      { x: 17 * TILE, y: 41 * TILE },
+    ],
+  },
 ];
 
 // The race state lives on S.race so save/load, the HUD and the renderer can
@@ -118,6 +130,15 @@ export function tryStartRace(S, rng, audio) {
   S.race.timer = 0;
   S.race.countdown = 3.2;
   S.race.started = false;
+  // The rival talks before the light goes green — and again if he beats
+  // the player to the line. It costs nothing and makes losing sting.
+  const taunts = [
+    'Rival: "Hope that thing has brakes, Rook."',
+    'Rival: "I own these streets. Try to keep up."',
+    'Rival: "Vera\'s boy thinks he can drive? Cute."',
+    'Rival: "Last one to the line buys the coffee."',
+  ];
+  addMessage(S, taunts[Math.floor(Math.random() * taunts.length)]);
   // The rival lines up beside the player, same road, same direction.
   const rival = makeCar(def.start.x - 60, def.start.y + 40, 0, 'muscle', 'rival');
   rival.cruise = def.rivalSpeed;
@@ -210,6 +231,7 @@ function finishRace(S, audio) {
   const def = race.def;
   const rivalDone = race.rival && race.rival.finished;
   let payout = rivalDone ? def.reward : def.reward * 2;
+  if (rivalDone) addMessage(S, 'Rival: "Told you. Same time tomorrow, if you dare."');
   const hour = (S.clockMin / 60) % 24;
   const isNight = hour >= 20 || hour < 5;
   if (isNight) payout = Math.round(payout * 1.5);

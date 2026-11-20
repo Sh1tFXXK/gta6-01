@@ -67,6 +67,7 @@ function cancelCourier(S, why, audio) {
   gig.active = false;
   gig.pickup = null;
   gig.drop = null;
+  gig.streak = 0; // a cancellation breaks the loyalty streak
   addMessage(S, `Gig cancelled — ${why}`);
   if (audio) audio.missionFail();
 }
@@ -100,6 +101,14 @@ export function updateCourier(S, dt, audio) {
       addMoney(S, total, `courier gig done ($${gig.pay} + $${tip} speed tip)`);
       S.mission.banner = `GIG DONE  +$${total}`;
       S.mission.bannerT = 3;
+      // Loyalty: three gigs in a row with no cancellation earns a $100
+      // regular-customer bonus — the dispatcher rewards reliability.
+      gig.streak = (gig.streak || 0) + 1;
+      if (gig.streak >= 3) {
+        gig.streak = 0;
+        addMoney(S, 100, 'courier loyalty bonus (3 gigs in a row)');
+        addMessage(S, 'Dispatcher: "Three clean runs — here\'s a loyalty bonus, Rook."');
+      }
       gig.active = false;
       gig.pickup = null;
       gig.drop = null;
