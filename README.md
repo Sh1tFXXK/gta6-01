@@ -67,6 +67,10 @@ Deterministic scenes via `?shot=<name>&seed=1`: `chase` (the SBPD chase —
 the first screenshot), `drive` (golden-hour cruise), `mission` (Package Run),
 `start` (title over the skyline).
 
+To jump straight to the chase scene once the server is running, open
+`http://localhost:8080/?shot=chase&seed=1`. Pressing **P** pauses the game
+and shows the full-city map with your progress tiles and crew list.
+
 ## Run it
 
 ```sh
