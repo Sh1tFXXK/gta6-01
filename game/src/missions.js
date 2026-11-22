@@ -1,247 +1,170 @@
-// missions.js — the story chain plus side jobs (taxi fares, package collect,
-// rampage timer). One job: objectives, progress, success and failure.
-import { MISSION_DEFS } from './config.js';
-import { dist } from './random.js';
-import { addMessage, addMoney } from './state.js';
+// Story missions 1–5 for Solmar Nights 3D, plus the generic stage engine:
+// goto / pickup / kill / crack / escape stages with waypoint beacons.
+
+import { S, W } from './state.js';
+import { MISSION_DEFS, GARAGE } from './config.js';
+import { dist2d, fmtTime } from './random.js';
+import { sfx } from './audio.js';
+import { setWaypoint } from './render.js';
 import { spawnGang } from './combat.js';
-import { makeCar } from './vehicles.js';
-import { raiseWanted } from './player.js';
-import { setupMission78, updateMission78 } from './missions2.js';
+import { addWanted } from './police.js';
+import { addRespect } from './state.js';
+import { spawnCar, nearestCar } from './vehicles.js';
 
-export function currentMissionDef(S) { return MISSION_DEFS[S.mission.index] || null; }
+export const MISSION_STAGES = {
+  1: [ // First Wheels
+    { type: 'steal', text: 'Steal a car (press E near one)' },
+    { type: 'goto', x: -350, z: 300, r: 14, text: 'Drive it to the Docks' },
+  ],
+  2: [ // Package Run
+    { type: 'goto', x: 50, z: -50, r: 10, text: 'Pick up the package at Solmar Plaza' },
+    { type: 'goto', x: 350, z: -300, r: 10, text: 'Deliver it to Marina Row', timer: 120 },
+  ],
+  3: [ // Taxi Rush
+    { type: 'taxi', text: 'Get into a taxi (yellow cab)' },
+    { type: 'goto', x: 250, z: 200, r: 10, text: 'Pick up the fare on Kumala Strand' },
+    { type: 'goto', x: 100, z: -150, r: 10, text: 'Drop them at the hotel', timer: 90 },
+  ],
+  4: [ // Gang Trouble
+    { type: 'spawn', n: 4, x: -350, z: 300, text: 'Vipers at the Docks — drop 4' },
+    { type: 'kill', n: 4, text: 'Vipers down: 0/4' },
+  ],
+  5: [ // The Big Score
+    { type: 'goto', x: -50, z: -100, r: 10, text: 'Reach the bank on Old Market' },
+    { type: 'crack', x: -50, z: -100, secs: 18, text: 'Crack the vault — stay in the circle' },
+    { type: 'escape', text: 'Lose the heat, then reach the Safehouse' },
+  ],
+};
 
-export function startMission(S, rng, audio) {
-  const def = currentMissionDef(S);
-  if (!def) { S.mission.active = false; S.mission.objective = 'All story missions complete — free roam Solmar Bay!'; return; }
+export const MISSION_REWARDS = { 1: 150, 2: 250, 3: 300, 4: 400, 5: 800, 6: 600, 7: 700, 8: 1000 };
+
+export function startMission(id) {
+  const def = MISSION_DEFS.find(m => m.id === id);
+  if (!def || S.missionsDone.includes(id) || S.mission) return false;
+  const stages = MISSION_STAGES[id];
+  if (!stages) return false;
+  S.mission = { id, stage: 0, t: 0, data: {}, stages };
+  S.dialogue = { name: def.giver, line: def.brief, t: 6 };
+  S.objective = `JOB ${id}/8 — ${def.name}`;
+  sfx.mission();
+  if (id === 6) S.wanted = Math.max(S.wanted, 2); // M6 starts hot
+  return true;
+}
+
+export function missionTarget() {
+  if (!S.mission) return null;
+  const st = S.mission.stages[S.mission.stage];
+  if (!st) return null;
+  if (st.type === 'goto' || st.type === 'crack' || st.type === 'spawn') return { x: st.x, z: st.z };
+  return null;
+}
+
+export function updateMissions(dt) {
   const m = S.mission;
-  m.active = true; m.stage = 0; m.delivered = 0; m.kills = 0; m.timer = 0;
-  m.passenger = false; m.done = false;
-  m.banner = `MISSION: ${def.title}`; m.bannerT = 4;
-  addMessage(S, def.briefing);
-  if (audio) audio.missionOk();
-  // Mission 6 starts hot: the SBPD is already on you when the clock starts.
-  if (m.index === 5) {
-    raiseWanted(S, 2, 'The SBPD is already on your tail — move!');
-    m.timer = 150;
-  }
-  setupMissionStage(S, rng, audio);
-}
+  if (!m) { setWaypoint(0, 0, false); return; }
+  const st = m.stages[m.stage];
+  if (!st) { completeMission(); return; }
+  const p = S.player;
+  const px = p.car ? p.car.x : p.x, pz = p.car ? p.car.z : p.z;
+  m.t += dt;
+  S.objective = `JOB ${m.id}/8 — ${st.text}`;
+  const target = missionTarget();
+  if (target) setWaypoint(target.x, target.z, true);
+  else setWaypoint(0, 0, false);
 
-function setTarget(S, place, objective) {
-  S.mission.target = { x: place.x, y: place.y, label: place.label };
-  S.mission.objective = objective;
-}
-
-export function setupMissionStage(S, rng, audio) {
-  const m = S.mission, P = S.city.places;
-  if (m.index === 0) {
-    setTarget(S, P.docks, 'Steal any car and drive to the Docks');
-  } else if (m.index === 1) {
-    const stops = [P.plaza, P.hotel, P.gas];
-    setTarget(S, stops[m.stage], `Deliver package ${m.stage + 1} of 3 — ${stops[m.stage].label}`);
-  } else if (m.index === 2) {
-    if (m.stage === 0) { setTarget(S, P.plaza, 'Get a taxi, then pick up the fare at the Plaza'); m.timer = 150; }
-    else setTarget(S, P.hotel, 'Drop the fare at Hotel Solmar — beat the clock!');
-  } else if (m.index === 3) {
-    if (m.stage === 0) {
-      setTarget(S, P.arcade, 'Go to the Old Arcade and take down the Rust Vipers');
-      if (S.enemies.length === 0) spawnGang(S, rng, P.arcade.x, P.arcade.y, 4);
+  switch (st.type) {
+    case 'steal':
+      if (p.car) nextStage();
+      break;
+    case 'taxi':
+      if (p.car && p.car.type === 'taxi') nextStage();
+      break;
+    case 'goto': {
+      const d = dist2d(px, pz, st.x, st.z);
+      if (st.timer && m.t > st.timer) { failMission('Too slow — the job went cold.'); return; }
+      if (d < st.r) { sfx.pickup(); nextStage(); }
+      break;
     }
-  } else if (m.index === 4) {
-    if (m.stage === 0) setTarget(S, P.bank, 'Go to Bay Bank and grab the cash');
-    else if (m.stage === 1) setTarget(S, P.safehouse, 'Lose the cops — reach the Safehouse!');
-  } else if (m.index === 5) {
-    // The Last Delivery: three drops on one clock, cops already chasing.
-    const stops = [P.gas, P.pier, P.hotel];
-    setTarget(S, stops[m.stage], `Drop ${m.stage + 1} of 3 — ${stops[m.stage].label} (${Math.ceil(m.timer)}s left)`);
-  } else if (m.index === 6 || m.index === 7) {
-    // Round 3: missions 7 (Vera's Escort) and 8 (The Vault Job) live in missions2.js.
-    setupMission78(S, rng, audio);
-  }
-}
-
-export function updateMission(S, rng, dt, audio) {
-  const m = S.mission;
-  if (!m.active) return;
-  // Round 3 missions (7 and 8) run their own update in missions2.js.
-  if (m.index >= 6) {
-    return updateMission78(S, rng, dt, audio, {
-      complete: () => completeMission(S, audio),
-      fail: (why) => failMission(S, why, audio),
-    });
-  }
-  if (m.bannerT > 0) m.bannerT -= dt;
-  if (m.timer > 0) {
-    m.timer -= dt;
-    if (m.timer <= 0) {
-      if (m.index === 2) return failMission(S, 'The fare got tired of waiting.', audio);
-      if (m.index === 5) return failMission(S, 'Out of time — the drops went cold.', audio);
+    case 'spawn':
+      spawnGang(st.x, st.z, st.n);
+      m.data.need = st.n;
+      m.data.startVipers = S.stats.vipersDown;
+      nextStage();
+      break;
+    case 'kill': {
+      const down = S.stats.vipersDown - (m.data.startVipers || 0);
+      st.text = `Vipers down: ${down}/${m.data.need}`;
+      if (down >= m.data.need) nextStage();
+      break;
     }
-  }
-  const t = m.target;
-  if (!t) return;
-  const d = dist(S.player.x, S.player.y, t.x, t.y);
-  const near = d < 90;
-  if (m.index === 0) {
-    if (near && S.player.inCar) completeMission(S, audio);
-  } else if (m.index === 1) {
-    if (near) {
-      m.delivered++; addMoney(S, 60, 'package delivered');
-      if (audio) audio.cash();
-      if (m.delivered >= 3) completeMission(S, audio);
-      else { m.stage++; setupMissionStage(S, rng, audio); }
-    }
-  } else if (m.index === 2) {
-    if (m.stage === 0) {
-      const inTaxi = S.player.inCar && S.player.inCar.type === 'taxi';
-      if (near && inTaxi) {
-        m.stage = 1; m.passenger = true; m.timer = 120;
-        setupMissionStage(S, rng, audio);
-        addMessage(S, 'Fare aboard! "Hotel Solmar, and step on it!"');
-        if (audio) audio.pickup();
-      } else if (near && !inTaxi) {
-        m.objective = 'You need a TAXI for this fare — steal one (yellow car)!';
+    case 'crack': {
+      const d = dist2d(px, pz, st.x ?? -50, st.z ?? -100);
+      if (d < 12) {
+        m.data.crack = (m.data.crack || 0) + dt;
+        st.text = `Cracking the vault… ${Math.ceil(st.secs - m.data.crack)}s`;
+        if (m.data.crack >= st.secs) { addWanted(3); nextStage(); }
+      } else {
+        st.text = 'Get back to the vault circle!';
       }
-    } else if (near && m.passenger) {
-      addMoney(S, 80, 'fare + tip'); completeMission(S, audio);
+      break;
     }
-  } else if (m.index === 3) {
-    if (m.kills >= 4) completeMission(S, audio);
-  } else if (m.index === 4) {
-    if (m.stage === 0 && near) {
-      m.stage = 1; addMoney(S, 200, 'bank cash grabbed');
-      raiseWanted(S, 3, 'The bank job is on — the SBPD is coming!');
-      setupMissionStage(S, rng, audio);
-      if (audio) audio.siren();
-    } else if (m.stage === 1 && near && S.wanted <= 1) {
-      completeMission(S, audio);
-    } else if (m.stage === 1 && near) {
-      m.objective = 'Too hot! Lose the cops first (get wanted to 1★ or less), then reach the Safehouse.';
+    case 'escape': {
+      if (S.wanted <= 1 && dist2d(px, pz, 450, 400) < 16) { nextStage(); return; }
+      if (S.wanted <= 1) {
+        // Safehouse beacon at North Hills.
+        setWaypoint(450, 400, true);
+        st.text = 'Heat is low — reach the Safehouse (north-east)';
+      } else {
+        setWaypoint(0, 0, false);
+        st.text = `Lose the heat first — wanted ${S.wanted}★`;
+      }
+      break;
     }
-  } else if (m.index === 5) {
-    if (near) {
-      m.delivered++; addMoney(S, 80, 'drop delivered');
-      if (audio) audio.cash();
-      if (m.delivered >= 3) completeMission(S, audio);
-      else { m.stage++; setupMissionStage(S, rng, audio); }
-    }
+    case 'wait':
+      if (m.t > (st.secs || 5)) nextStage();
+      break;
+  }
+  // Mission timer display.
+  const timed = m.stages[m.stage];
+  if (timed && timed.timer) {
+    S.missionClock = Math.max(0, timed.timer - m.t);
+  } else S.missionClock = 0;
+}
+
+export function nextStage() {
+  S.mission.stage++;
+  S.mission.t = 0;
+  sfx.pickup();
+}
+
+export function completeMission() {
+  const id = S.mission.id;
+  const reward = MISSION_REWARDS[id] || 200;
+  S.money += reward;
+  addRespect(reward);
+  S.missionsDone.push(id);
+  if (S.clockMin >= 20 * 60 || S.clockMin < 6 * 60) S.stats.nightJobs++;
+  S.banner = { text: 'JOB COMPLETE', sub: `+$${reward}  •  +${reward} RP`, t: 3 };
+  sfx.mission();
+  S.mission = null;
+  setWaypoint(0, 0, false);
+  if (S.missionsDone.length >= 8) {
+    S.mode = 'complete';
+    S.banner = { text: 'SOLMAR NIGHTS — STORY COMPLETE', sub: 'Rook owns the Bay now', t: 6 };
   }
 }
 
-export function completeMission(S, audio) {
-  const def = currentMissionDef(S);
-  S.mission.active = false; S.mission.done = true;
-  S.mission.banner = `MISSION COMPLETE: ${def.title}  +$${def.reward}`;
-  S.mission.bannerT = 5;
-  S.mission.objective = S.mission.index >= MISSION_DEFS.length - 1
-    ? 'Story complete! Free roam Solmar Bay — find the stash, hit the ramps.'
-    : 'Mission complete! Press N for the next mission.';
-  addMoney(S, def.reward, def.title);
-  S.stats.missionsDone++;
-  if (audio) audio.missionOk();
-  saveGame(S);
+export function failMission(reason) {
+  S.banner = { text: 'JOB FAILED', sub: reason, t: 3 };
+  sfx.fail();
+  S.mission = null;
+  setWaypoint(0, 0, false);
 }
 
-export function failMission(S, why, audio) {
-  S.mission.active = false;
-  S.mission.banner = `MISSION FAILED: ${why}`;
-  S.mission.bannerT = 5;
-  S.mission.objective = 'Mission failed — press N to retry it.';
-  if (audio) audio.missionFail();
-}
-
-export function nextMission(S, rng, audio) {
-  if (S.mission.active) { addMessage(S, 'Finish the current mission first (or press N after it ends).'); return; }
-  if (S.mission.done) S.mission.index++;
-  const def = currentMissionDef(S);
-  if (!def) {
-    S.mission.objective = 'All story missions complete — free roam Solmar Bay!';
-    addMessage(S, 'You finished the story! Free roam, collect the stash (◆), hit a ramp, start a rampage (R).');
-    return;
+// N starts the next available story mission.
+export function tryStartNextMission() {
+  if (S.mission) return;
+  for (let id = 1; id <= 8; id++) {
+    if (!S.missionsDone.includes(id)) { startMission(id); return; }
   }
-  startMission(S, rng, audio);
-}
-
-// --- Side jobs ------------------------------------------------------------
-export function startRampage(S, audio) {
-  if (S.rampage.active) return;
-  S.rampage.active = true; S.rampage.timer = 60; S.rampage.kills = 0;
-  S.mission.banner = 'RAMPAGE! Cause chaos for 60 seconds — every takedown pays $20.';
-  S.mission.bannerT = 4;
-  raiseWanted(S, 2, 'Rampage started!');
-  if (audio) audio.siren();
-}
-export function updateRampage(S, dt, audio) {
-  if (!S.rampage.active) return;
-  S.rampage.timer -= dt;
-  if (S.rampage.timer <= 0) {
-    S.rampage.active = false;
-    const pay = S.rampage.kills * 20;
-    if (pay > 0) addMoney(S, pay, `rampage: ${S.rampage.kills} takedowns`);
-    addMessage(S, `Rampage over — ${S.rampage.kills} takedowns.`);
-  }
-}
-export function startTaxiFare(S, rng) {
-  if (S.taxi.active) return;
-  const inTaxi = S.player.inCar && S.player.inCar.type === 'taxi';
-  if (!inTaxi) { addMessage(S, 'Taxi fares need a taxi — steal a yellow cab first.'); return; }
-  S.taxi.active = true;
-  S.taxi.fare = { x: S.city.places.hotel.x, y: S.city.places.hotel.y, label: 'Hotel Solmar' };
-  S.taxi.timer = 90;
-  addMessage(S, 'Fare: "Hotel Solmar, quick!" — 90 seconds.');
-}
-export function updateTaxiFare(S, dt, audio) {
-  if (!S.taxi.active) return;
-  S.taxi.timer -= dt;
-  if (S.taxi.timer <= 0) { S.taxi.active = false; addMessage(S, 'Fare cancelled — too slow.'); return; }
-  if (dist(S.player.x, S.player.y, S.taxi.fare.x, S.taxi.fare.y) < 90) {
-    S.taxi.active = false; addMoney(S, 45, 'taxi fare');
-    if (audio) audio.cash();
-  }
-}
-
-// --- Save / load ----------------------------------------------------------
-import { SAVE_KEY } from './config.js';
-export function saveGame(S) {
-  try {
-    const data = {
-      money: S.money, health: S.player.health, ammo: S.player.ammo,
-      x: S.player.x, y: S.player.y, wanted: S.wanted,
-      missionIndex: S.mission.index, missionsDone: S.stats.missionsDone,
-      carsStolen: S.stats.carsStolen, cashEarned: S.stats.cashEarned,
-      day: S.day, stashGot: S.stashGot, stunts: S.stats.stunts,
-      // Round 3: race best times and turf income survive a reload.
-      raceBest: S.race ? S.race.best : {},
-      racesWon: S.race ? S.race.won : 0,
-      turfEarned: S.turf ? S.turf.earned : 0,
-      turfCaptured: S.turf ? S.turf.captured : 0,
-      challengesClaimed: S.daily ? S.daily.claimed : {},
-      challengesDay: S.daily ? S.daily.day : 0,
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    addMessage(S, 'Game saved.');
-  } catch { /* storage unavailable */ }
-}
-export function loadGame(S) {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) { addMessage(S, 'No save found yet.'); return false; }
-    const d = JSON.parse(raw);
-    S.money = d.money; S.player.health = d.health; S.player.ammo = d.ammo;
-    S.player.x = d.x; S.player.y = d.y; S.wanted = d.wanted || 0;
-    S.mission.index = d.missionIndex || 0;
-    S.stats.missionsDone = d.missionsDone || 0;
-    S.stats.carsStolen = d.carsStolen || 0;
-    S.stats.cashEarned = d.cashEarned || 0;
-    S.day = d.day || 1;
-    S.stashGot = d.stashGot || 0;
-    S.stats.stunts = d.stunts || 0;
-    // Round 3 save fields (older saves simply lack them).
-    if (S.race) { S.race.best = d.raceBest || {}; S.race.won = d.racesWon || 0; }
-    if (S.turf) { S.turf.earned = d.turfEarned || 0; S.turf.captured = d.turfCaptured || 0; }
-    // Round 3 challenge progress (same-day saves keep claimed challenges).
-    if (S.daily && d.challengesDay === S.daily.day) S.daily.claimed = d.challengesClaimed || {};
-    addMessage(S, 'Save loaded. Welcome back to Solmar Bay.');
-    return true;
-  } catch { addMessage(S, 'Save could not be read.'); return false; }
 }

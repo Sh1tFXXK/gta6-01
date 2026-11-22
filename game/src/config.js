@@ -1,87 +1,135 @@
-// config.js — every tuneable number, name and colour for Solmar Nights.
-// One clear job: constants only. No logic, no imports.
-export const GAME_NAME = 'Solmar Nights';
-export const CITY_NAME = 'Solmar Bay';
-export const SAVE_KEY = 'solmar-nights-save-v1';
+// Solmar Nights — 3D rebuild (round 4). Central tuning + content tables.
+// Everything here is original: the city of Solmar Bay, Rook Marlow, Vera
+// Solano, the Rust Vipers and the SBPD are invented for this game.
 
-export const TILE = 48;              // pixels per city tile
-export const CITY_TILES = 64;        // city is 64 x 64 tiles
-export const CITY_SIZE = TILE * CITY_TILES; // 3072 px square
-export const VIEW_W = 1280;
-export const VIEW_H = 800;
-
-export const COLORS = {
-  grass: '#7ec850', grass2: '#74bd48', park: '#5da83f', sand: '#f2d8a0',
-  water: '#2e8fd6', waterDeep: '#1f6fb8', road: '#3a3f47', roadLine: '#e8d44d',
-  sidewalk: '#b9bcc2', buildingRoof: '#c96f4a', buildingRoof2: '#4a7ec9',
-  buildingRoof3: '#8a5fc9', buildingRoof4: '#e0a83c', wall: '#8d9099',
-  hudBg: 'rgba(8,12,20,0.72)', hudText: '#ffffff', accent: '#ffd23f',
-  danger: '#ff4d4d', good: '#57e389', policeBlue: '#3b82f6', policeRed: '#ef4444',
-  stashGold: '#ffd23f', rampYellow: '#ffe066', nightTint: 'rgba(8,10,40,0.38)',
+export const WORLD = {
+  half: 560,            // playable half-extent in metres (city core)
+  roadStep: 100,        // distance between parallel streets
+  roadHalf: 7,          // half width of a street
+  blockHalf: 36,        // half size of a city block's buildable area
+  seaAt: -560,          // beach / sea line on the south edge (z < seaAt is water)
+  gravity: 30,
 };
 
-export const CAR_TYPES = {
-  sedan:  { name: 'Solmar Sedan',  color: '#d94f4f', top: 340, accel: 260, grip: 3.4, len: 46, wid: 22 },
-  taxi:   { name: 'Bay Taxi',      color: '#f5c518', top: 330, accel: 250, grip: 3.3, len: 46, wid: 22 },
-  truck:  { name: 'Harbor Truck',  color: '#4f7ed9', top: 260, accel: 180, grip: 2.6, len: 58, wid: 26 },
-  sports: { name: 'Comet GT',      color: '#e33fa1', top: 470, accel: 380, grip: 4.2, len: 48, wid: 22 },
-  police: { name: 'SBPD Cruiser',  color: '#24344d', top: 420, accel: 340, grip: 3.9, len: 48, wid: 23 },
-  van:    { name: 'Pier Van',      color: '#e8e8e8', top: 290, accel: 210, grip: 2.9, len: 52, wid: 24 },
-  // Round 2: two new rides — a nimble street bike and a heavy V8 muscle car.
-  bike:   { name: 'Street Bike',   color: '#f97316', top: 440, accel: 420, grip: 4.6, len: 36, wid: 14 },
-  muscle: { name: 'V8 Muscle',     color: '#7c3aed', top: 400, accel: 340, grip: 3.6, len: 50, wid: 24 },
-  // Round 3: a long limo for the hotel crowd and a pickup for the docks.
-  limo:   { name: 'Bay Limo',      color: '#1f2937', top: 300, accel: 220, grip: 3.0, len: 62, wid: 24 },
-  pickup: { name: 'Docks Pickup',  color: '#0e7490', top: 320, accel: 240, grip: 3.2, len: 52, wid: 24 },
+// Sunset palette: warm dusk gold, teal sea, coral neon.
+export const PALETTE = {
+  skyTop: 0x2b3a6e, skyMid: 0xff9a52, skyLow: 0xffc46b,
+  sun: 0xffd27a, fog: 0xe08a4e,
+  road: 0x2e2a33, roadLine: 0xd8c25a, sidewalk: 0x8a7f74,
+  sea: 0x1d6f7a, sand: 0xd9b380,
+  building: [0xb5654a, 0xc98a5a, 0x9a5f6e, 0x7a6a8a, 0xa8763e, 0x5f7a8a],
+  windowLit: 0xffd27a, windowDark: 0x2a3242,
+  palmTrunk: 0x6e4a2f, palmLeaf: 0x3f7a3a,
 };
-export const CAR_TYPE_KEYS = ['sedan', 'taxi', 'truck', 'sports', 'van', 'bike', 'muscle', 'limo', 'pickup'];
 
-export const PED_NAMES = ['Mara', 'Jules', 'Tomas', 'Priya', 'Leo', 'Ana', 'Kai', 'Rosa', 'Felix', 'Nina'];
-export const PED_SHIRTS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#fd79a8'];
-export const GANG_NAME = 'The Rust Vipers';
-export const CONTACT_NAME = 'Vera Solano';
-export const PLAYER_NAME = 'Rook Marlow';
+export const VEHICLES = {
+  sedan:    { name: 'Solmar Sedan',  top: 34, accel: 16, brake: 30, grip: 2.6, color: 0x4a7ab5, len: 4.6, wid: 2.0 },
+  taxi:     { name: 'Bay Taxi',      top: 32, accel: 15, brake: 30, grip: 2.6, color: 0xe8b93a, len: 4.6, wid: 2.0 },
+  comet:    { name: 'Comet GT',      top: 52, accel: 26, brake: 34, grip: 3.4, color: 0xd84a6e, len: 4.4, wid: 2.0 },
+  truck:    { name: 'Hauler Truck',  top: 28, accel: 11, brake: 24, grip: 2.0, color: 0x7a7f85, len: 6.4, wid: 2.4 },
+  sports:   { name: 'Vireo GT',      top: 55, accel: 28, brake: 36, grip: 3.6, color: 0x2fae7a, len: 4.3, wid: 1.9 },
+  van:      { name: 'Panel Van',     top: 30, accel: 13, brake: 26, grip: 2.2, color: 0x8a8f96, len: 5.4, wid: 2.2 },
+  police:   { name: 'SBPD Cruiser',  top: 46, accel: 24, brake: 36, grip: 3.4, color: 0x1d2f4a, len: 4.8, wid: 2.0 },
+  bike:     { name: 'Street Bike',   top: 48, accel: 30, brake: 38, grip: 4.0, color: 0xc23a2e, len: 2.4, wid: 0.9 },
+  muscle:   { name: 'V8 Muscle',     top: 50, accel: 24, brake: 32, grip: 3.0, color: 0x3a2a5e, len: 4.8, wid: 2.1 },
+  limo:     { name: 'Solmar Limo',   top: 36, accel: 14, brake: 28, grip: 2.4, color: 0x1a1a22, len: 7.2, wid: 2.1 },
+  pickup:   { name: 'Dune Pickup',   top: 38, accel: 17, brake: 30, grip: 2.8, color: 0xb56a2a, len: 5.0, wid: 2.1 },
+};
 
-// Hidden stash: Vera's cash drops scattered around Solmar Bay. Find them all.
-export const STASH_TOTAL = 10;
-export const STASH_REWARD = 100;
-// Stunt jumps: hit a ramp faster than this and the jump pays out.
-export const STUNT_MIN_SPEED = 200;
-export const STUNT_REWARD = 75;
-// Sprint stamina: drains while holding Shift, refills while walking.
-export const STAMINA_MAX = 100;
-export const STAMINA_DRAIN = 22;
-export const STAMINA_REGEN = 14;
+export const WEAPONS = [
+  { id: 'fists', name: 'FISTS',  ammo: Infinity, dmg: 12, rate: 0.45, range: 2.2, auto: false },
+  { id: 'pistol', name: '.38',   ammo: 60,  dmg: 34, rate: 0.28, range: 60, auto: false },
+  { id: 'smg',   name: 'SMG',    ammo: 120, dmg: 18, rate: 0.09, range: 55, auto: true },
+  { id: 'shotgun', name: '12G',  ammo: 24,  dmg: 22, rate: 0.8,  range: 26, auto: false, pellets: 6 },
+  { id: 'rifle', name: 'AR-9',   ammo: 90,  dmg: 40, rate: 0.16, range: 90, auto: true },
+  { id: 'bat',   name: 'BAT',    ammo: Infinity, dmg: 20, rate: 0.5, range: 2.6, auto: false },
+  { id: 'rpg',   name: 'RPG',    ammo: 4,   dmg: 220, rate: 1.4, range: 120, auto: false, locked: true },
+];
+// Slots the player starts with; the rest are LOCKED until respect unlocks them.
+export const WEAPON_UNLOCKS = { smg: 1, shotgun: 2, rifle: 3, bat: 1, rpg: 4 };
 
-// Story mission chain (id, title, briefing, reward). Objectives are scripted in missions.js.
-export const MISSION_DEFS = [
-  { id: 1, title: 'First Wheels', reward: 150,
-    briefing: 'Vera: "Rook, you need wheels. Borrow a car — any car — and bring it to the docks marker."',
-    hint: 'Walk to a car and press E to get in. Drive to the yellow marker.' },
-  { id: 2, title: 'Package Run', reward: 300,
-    briefing: 'Vera: "Three packages, three drop-offs. The Vipers are watching the north side, so keep it quick."',
-    hint: 'Follow the yellow markers and deliver all 3 packages.' },
-  { id: 3, title: 'Taxi Rush', reward: 250,
-    briefing: 'Vera: "A fare is waiting at the plaza. Pick them up in a taxi and get them to the hotel before the timer runs out."',
-    hint: 'Find the taxi, pick up the fare, beat the clock.' },
-  { id: 4, title: 'Gang Trouble', reward: 450,
-    briefing: 'Vera: "The Rust Vipers jumped our courier at the old arcade. Go sort it out — all four of them."',
-    hint: 'Click to shoot. Take down all 4 gang members.' },
-  { id: 5, title: 'The Big Score', reward: 1000,
-    briefing: 'Vera: "Last one, Rook. Grab the cash at the bank, then lose the cops and get to the safehouse. Make Solmar yours."',
-    hint: 'Grab the cash, survive wanted level 3, reach the safehouse.' },
-  { id: 6, title: 'The Last Delivery', reward: 600,
-    briefing: 'Vera: "One last run, Rook. Three drops, one clock, and the whole SBPD already on your tail. Don\'t get cute — get it done."',
-    hint: 'Deliver to 3 stops before the timer ends — the cops are already chasing you.' },
-  { id: 7, title: 'Vera\'s Escort', reward: 800,
-    briefing: 'Vera: "I\'m moving across town and the Vipers know it. Meet me at the Plaza, ride my bumper, and keep my car in one piece."',
-    hint: 'Meet Vera at the Plaza, then stay close while she drives hotel, pier, safehouse.' },
-  { id: 8, title: 'The Vault Job', reward: 1200,
-    briefing: 'Vera: "The big one, Rook. Crack the Bay Bank vault while the alarm screams, then run for the Safehouse with every cop in the city behind you."',
-    hint: 'Reach the bank, hold it while the vault cracks, then reach the Safehouse cold.' },
+export const RANKS = [
+  { rp: 0,    title: 'NOBODY' },
+  { rp: 800,  title: 'RUNNER' },
+  { rp: 2200, title: 'FIXER' },
+  { rp: 4500, title: 'HUSTLER' },
+  { rp: 7500, title: 'KINGPIN' },
 ];
 
-export const START_MONEY = 120;
-export const START_HEALTH = 100;
-export const START_AMMO = 60;
-export const MAX_WANTED = 5;
+export const CREW = [
+  { key: 'Z', id: 'plates',  name: 'SWAP PLATES', desc: 'Lose 1 wanted star', cd: 45 },
+  { key: 'X', id: 'fix',     name: 'QUICK FIX',   desc: 'Repair your car 40%', cd: 60 },
+  { key: 'F', id: 'eyes',    name: 'EYES OUT',    desc: 'Reveal all markers 20s', cd: 50 },
+];
+
+export const RADIO = [
+  { name: 'SOLMAR FM 98.6', tracks: ['Neon Tideline', 'Guava Sunrise', 'Palms at Dusk', 'Salt Air Drive'] },
+  { name: 'VIPER ROCK 101.1', tracks: ['Rust & Gasoline', 'Midnight Piston', 'Snakebite', 'Redline Sermon'] },
+  { name: 'BAY TALK 88.4', tracks: ['The Vera Hour', 'SBPD Scanner Chat', 'Tide Report', 'Dockside Stories'] },
+];
+
+export const TURFS = [
+  { id: 'docks',   name: 'THE DOCKS',   x: -350, z: 350,  r: 55 },
+  { id: 'plaza',   name: 'SOLMAR PLAZA',x: 50,   z: -50,  r: 60 },
+  { id: 'marina',  name: 'MARINA ROW',  x: 350,  z: -350, r: 55 },
+  { id: 'market',  name: 'OLD MARKET',  x: -150, z: -250, r: 55 },
+  { id: 'strand',  name: 'KUMALA STRAND', x: 250, z: 250, r: 60 },
+];
+
+export const GARAGE = { x: 200, z: 150, r: 30, bx: 235, bz: 150, name: "MACK'S GARAGE", price: 120 };
+
+export const STASH_SPOTS = 10; // hidden cash drops, $100 each
+
+export const CHALLENGE_POOL = [
+  { id: 'drive5',  text: 'Drive 5 km',            check: s => s.stats.kmDriven >= 5 },
+  { id: 'steal3',  text: 'Steal 3 cars',          check: s => s.stats.carsStolen >= 3 },
+  { id: 'airtime', text: 'Catch air off a ramp',  check: s => s.stats.jumps >= 1 },
+  { id: 'rain',    text: 'Drive in the rain',     check: s => s.stats.rainKm >= 0.5 },
+  { id: 'night',   text: 'Finish a job at night', check: s => s.stats.nightJobs >= 1 },
+  { id: 'ko4',     text: 'Drop 4 Vipers',         check: s => s.stats.vipersDown >= 4 },
+  { id: 'stunt',   text: 'Hit 200 km/h',          check: s => s.stats.topSpeed >= 200 },
+  { id: 'courier', text: 'Finish a courier run',  check: s => s.stats.courierDone >= 1 },
+  { id: 'race',    text: 'Win a street race',     check: s => s.stats.racesWon >= 1 },
+  { id: 'turf',    text: 'Capture a turf',        check: s => s.stats.turfsTaken >= 1 },
+  { id: 'cash',    text: 'Hold $2,000 at once',   check: s => s.money >= 2000 },
+  { id: 'escape',  text: 'Escape a 3-star chase', check: s => s.stats.escapes >= 1 },
+  { id: 'photo',   text: 'Visit the beach',       check: s => s.stats.beachVisits >= 1 },
+  { id: 'stamina', text: 'Sprint 400 m',          check: s => s.stats.sprintM >= 400 },
+];
+
+export const MISSION_DEFS = [
+  { id: 1, name: 'First Wheels',   giver: 'VERA SOLANO', brief: 'Steal a car and bring it to the Docks. Any car. Don\'t get cute.' },
+  { id: 2, name: 'Package Run',    giver: 'VERA SOLANO', brief: 'Pick up the package at the Plaza and drop it at the Marina. Fast.' },
+  { id: 3, name: 'Taxi Rush',      giver: 'VERA SOLANO', brief: 'Borrow a taxi, grab the fare on Strand, get them to the hotel.' },
+  { id: 4, name: 'Gang Trouble',   giver: 'VERA SOLANO', brief: 'Vipers are pushing on the Docks. Drop four of them.' },
+  { id: 5, name: 'The Big Score',  giver: 'VERA SOLANO', brief: 'Crack the bank vault, then lose the heat and reach the Safehouse.' },
+  { id: 6, name: 'The Last Delivery', giver: 'VERA SOLANO', brief: 'Three drops, 150 seconds, cops already on you. Go.' },
+  { id: 7, name: "Vera's Escort",  giver: 'VERA SOLANO', brief: 'Ride with me: hotel, pier, safehouse. Keep the Vipers off my car.' },
+  { id: 8, name: 'The Vault Job',  giver: 'VERA SOLANO', brief: 'Eighteen seconds on the vault. One-fifty on the clock. Then vanish.' },
+];
+
+export const RACE_DEFS = [
+  { id: 1, name: 'SUNSET SPRINT',  pads: [[-400, -400], [-200, -400], [0, -400], [200, -400], [400, -400]] },
+  { id: 2, name: 'STRAND DASH',    pads: [[400, 400], [200, 400], [0, 400], [-200, 400], [-400, 400]] },
+  { id: 3, name: 'DOCK RUN',       pads: [[-400, 400], [-400, 200], [-400, 0], [-200, 0], [0, 0]] },
+  { id: 4, name: 'MARINA LOOP',    pads: [[400, -400], [400, -200], [200, -200], [200, -400], [400, -400]] },
+  { id: 5, name: 'PLAZA CIRCUIT',  pads: [[0, 0], [200, 0], [200, 200], [0, 200], [-200, 200]] },
+  { id: 6, name: 'MARKET MILE',    pads: [[-200, -200], [-200, 0], [0, 0], [0, -200], [-200, -200]] },
+  { id: 7, name: 'BAY GRAND TOUR', pads: [[-400, -400], [400, -400], [400, 400], [-400, 400], [-400, -200]] },
+];
+
+export const DIALOGUE = {
+  intro: ['VERA SOLANO', 'Rook. You\'re back in Solmar Bay. The Vipers think the docks are theirs. Prove them wrong.'],
+  chase: ['SBPD DISPATCH', 'All units, suspect in a Comet GT heading down Strand. Air One has you in the light.'],
+  veraEscort: ['VERA SOLANO', 'Stay close, Rook. If my car takes a bullet, this whole night is wasted.'],
+  garage: ['MACK', 'You break it, I bill it. Hundred and twenty, and she\'ll run like new.'],
+  bust: ['SBPD', 'Hands where I can see them, Marlow. You\'re done.'],
+  wasted: ['ROOK MARLOW', 'Not like this. Not in my own city...'],
+};
+
+export const AREAS = [
+  { name: 'THE DOCKS', x: -350, z: 350 }, { name: 'SOLMAR PLAZA', x: 50, z: -50 },
+  { name: 'MARINA ROW', x: 350, z: -350 }, { name: 'OLD MARKET', x: -150, z: -250 },
+  { name: 'KUMALA STRAND', x: 250, z: 250 }, { name: 'THE BEACH', x: 0, z: -520 },
+  { name: 'DOWNTOWN', x: 0, z: 0 }, { name: 'NORTH HILLS', x: 0, z: 450 },
+];

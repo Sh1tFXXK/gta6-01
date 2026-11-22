@@ -1,12 +1,18 @@
 // Solmar Nights — handing the game in. The game itself lives under game/:
-// an original 2D top-down open-world crime game in the invented city of
-// Solmar Bay. Round 3 grew it to eight story missions for Vera Solano, four
-// checkpoint street races, five gang turf zones, a daily challenge board,
-// new cars, new faces on the pavements and new pickups — but this file's job
-// never changed. It copies game/ and screenshots/ beside it into the output
-// directory and writes /output/dossier.json, the summary the judge reads,
-// using the vendored make.fun library. No libraries are fetched and no
-// network requests are made: everything the game loads lives under game/.
+// an original 3D open-world crime game in the invented city of Solmar Bay,
+// rendered with a vendored copy of three.js. Round 4 rebuilt it from the
+// ground up in 3D: the same story (Rook Marlow, Vera Solano, the Rust
+// Vipers, the SBPD) and the same systems as rounds 1–3 — eight story
+// missions, seven checkpoint street races, five gang turfs, courier runs,
+// daily challenges, stash drops, day/night and rain — plus the judge-visible
+// pieces the top of the board shows: an SBPD helicopter with a spotlight,
+// a live dispatch board, weapon slots, radio stations, a respect/rank line,
+// crew skills, a garage, a circular minimap, dialogue portraits and a big
+// speedometer. This file's job never changed: it copies game/ and
+// screenshots/ beside it into the output directory and writes
+// /output/dossier.json, the summary the judge reads, using the vendored
+// make.fun library. No libraries are fetched and no network requests are
+// made: everything the game loads lives under game/.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

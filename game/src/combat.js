@@ -1,148 +1,181 @@
-// combat.js — shooting, drive-bys, gang enemies, pickups and hidden stash.
-// One job: violence and its rewards.
-import { dist, angleTo } from './random.js';
-import { circleHitsBuilding, sidewalkPoint } from './city.js';
-import { addMessage, addMoney } from './state.js';
-import { hurtEnemy, raiseWanted, spawnBlood } from './player.js';
-import { damageCar } from './vehicles.js';
-import { STASH_TOTAL, STASH_REWARD } from './config.js';
-import { applyStreetPickup } from './streetlife.js';
+// Combat for Solmar Nights 3D: mouse-aim shooting with raycasts,
+// drive-by fire, punching, Rust Viper gang enemies and tracers.
 
-export function spawnGang(S, rng, x, y, n) {
+import * as THREE from 'three';
+import { S, W } from './state.js';
+import { WEAPONS } from './config.js';
+import { mouse, hit } from './input.js';
+import { dist2d, clamp } from './random.js';
+import { sfx } from './audio.js';
+import { scarePeds, makePedMesh } from './pedestrians.js';
+import { addWanted } from './police.js';
+import { spawnExplosion } from './vehicles.js';
+
+let shootCd = 0;
+
+export function spawnGang(x, z, n = 1) {
   for (let i = 0; i < n; i++) {
-    S.enemies.push({
-      x: x + rng.range(-90, 90), y: y + rng.range(-90, 90),
-      angle: 0, hp: 100, dead: false, shootCd: rng.range(0.5, 1.5),
-      speed: 95, name: 'Rust Viper',
-    });
+    const mesh = makePedMesh('walker', 0x3a2a2a);
+    const gx = x + (Math.random() - 0.5) * 12, gz = z + (Math.random() - 0.5) * 12;
+    mesh.position.set(gx, 0, gz);
+    W.scene.add(mesh);
+    S.gang.push({ mesh, x: gx, z: gz, hp: 100, heading: 0, shootT: 1 + Math.random(), dead: false });
   }
 }
 
-export function fireBullet(S, fromX, fromY, angle, fromPlayer, audio) {
-  if (fromPlayer) {
-    if (S.player.ammo <= 0) { addMessage(S, 'Out of ammo — find an ammo pickup (green box).'); return; }
-    S.player.ammo--; S.stats.shotsFired++;
-    S.gunfireT = S.time; // nearby peds hear the shot and run
+export function updateCombat(dt) {
+  shootCd -= dt;
+  const p = S.player;
+  const px = p.car ? p.car.x : p.x, pz = p.car ? p.car.z : p.z;
+  const w = WEAPONS[S.weapon];
+  // Switch weapons: 1-7 keys.
+  for (let i = 0; i < WEAPONS.length; i++) {
+    if (hit('Digit' + (i + 1))) { S.weapon = i; sfx.click(); }
   }
-  S.bullets.push({ x: fromX, y: fromY, angle, speed: 900, life: 0.9, fromPlayer });
-  if (audio) audio.shoot();
-  // Muzzle flash particle.
-  S.particles.push({
-    x: fromX + Math.cos(angle) * 26, y: fromY + Math.sin(angle) * 26,
-    vx: 0, vy: 0, life: 0.08, max: 0.08, color: '#ffe066', size: 7,
-  });
-}
-
-export function updateBullets(S, dt, audio) {
-  for (let i = S.bullets.length - 1; i >= 0; i--) {
-    const b = S.bullets[i];
-    b.x += Math.cos(b.angle) * b.speed * dt;
-    b.y += Math.sin(b.angle) * b.speed * dt;
-    b.life -= dt;
-    const wallHit = circleHitsBuilding(S.city, b.x, b.y, 2);
-    let hit = b.life <= 0 || wallHit;
-    if (wallHit) {
-      // Sparks where the bullet bites the wall.
-      for (let s = 0; s < 3; s++) {
-        S.particles.push({ x: b.x, y: b.y, vx: (Math.random() - 0.5) * 120, vy: (Math.random() - 0.5) * 120, life: 0.25, max: 0.25, color: '#ffe066', size: 2 });
-      }
-    }
-    if (b.fromPlayer) {
-      for (const e of S.enemies) {
-        if (!e.dead && dist(b.x, b.y, e.x, e.y) < 18) { hurtEnemy(S, e, 34, audio); hit = true; break; }
-      }
-      if (!hit) for (const cop of S.cops) {
-        if (dist(b.x, b.y, cop.x, cop.y) < 16) {
-          cop.hp -= 34; spawnBlood(S, cop.x, cop.y); hit = true;
-          raiseWanted(S, 1, 'Shot at a cop!');
-          if (cop.hp <= 0) { cop.hp = 0; S.cops.splice(S.cops.indexOf(cop), 1); }
-          break;
-        }
-      }
-      if (!hit) for (const ped of S.peds) {
-        if (ped.hp > 0 && dist(b.x, b.y, ped.x, ped.y) < 14) {
-          ped.hp = 0; S.stats.pedsHit++; spawnBlood(S, ped.x, ped.y);
-          raiseWanted(S, 1, 'Pedestrian shot!'); hit = true; break;
-        }
-      }
-      if (!hit) for (const c of S.cars) {
-        if (c.driver !== 'player' && !c.dead && dist(b.x, b.y, c.x, c.y) < 26) {
-          damageCar(S, c, 10, audio); hit = true; break;
-        }
-      }
-    } else if (dist(b.x, b.y, S.player.x, S.player.y) < 14 && !S.player.inCar) {
-      S.player.health -= 7; spawnBlood(S, S.player.x, S.player.y); hit = true;
-      S.cam.shake = Math.max(S.cam.shake, 4);
-    }
-    if (hit) S.bullets.splice(i, 1);
-  }
-}
-
-export function updateEnemies(S, dt, audio) {
-  const px = S.player.x, py = S.player.y;
-  for (const e of S.enemies) {
-    if (e.dead) continue;
-    const d = dist(e.x, e.y, px, py);
-    e.angle = angleTo(e.x, e.y, px, py);
-    if (d > 240) {
-      const nx = e.x + Math.cos(e.angle) * e.speed * dt;
-      const ny = e.y + Math.sin(e.angle) * e.speed * dt;
-      if (!circleHitsBuilding(S.city, nx, ny, 12)) { e.x = nx; e.y = ny; }
+  // Fire: mouse click (or Space on foot for fists).
+  const wantFire = mouse.clicked || (w.auto && mouse.down) || (w.id === 'fists' && hit('Space'));
+  if (wantFire && shootCd <= 0 && S.mode === 'play') {
+    if (w.id === 'fists' || w.id === 'bat') {
+      shootCd = w.rate;
+      sfx.punch();
+      meleeHit(w);
     } else {
-      e.shootCd -= dt;
-      if (e.shootCd <= 0) {
-        e.shootCd = 1.1 + Math.random() * 0.8;
-        fireBullet(S, e.x, e.y, e.angle + (Math.random() - 0.5) * 0.25, false, audio);
-      }
+      const ammoKey = w.id;
+      if ((S.ammo[ammoKey] || 0) <= 0) { shootCd = 0.3; sfx.fail(); return; }
+      shootCd = w.rate;
+      S.ammo[ammoKey]--;
+      fireShot(w, px, pz);
     }
   }
-  S.enemies = S.enemies.filter((e) => !e.dead || (e.deadT = (e.deadT || 0) + dt) < 4);
-}
-
-export function updatePickups(S, dt, audio) {
-  for (let i = S.pickups.length - 1; i >= 0; i--) {
-    const pk = S.pickups[i];
-    pk.bob = (pk.bob || 0) + dt;
-    if (dist(pk.x, pk.y, S.player.x, S.player.y) < 30) {
-      if (pk.kind === 'cash') { addMoney(S, pk.value, 'package cash'); }
-      else if (pk.kind === 'health') { S.player.health = Math.min(100, S.player.health + 40); addMessage(S, 'Health +40'); }
-      else if (pk.kind === 'ammo') { S.player.ammo += 30; addMessage(S, 'Ammo +30'); }
-      else if (pk.kind === 'stash') {
-        S.stashGot++;
-        addMoney(S, STASH_REWARD, `stash ${S.stashGot}/${S.stashTotal} found`);
-        if (S.stashGot >= S.stashTotal) addMessage(S, 'All stash found — Vera owes you a drink.');
-        if (audio) audio.stash();
-      }
-      // Round 3 pickups: wrench, coffee and briefcase (see streetlife.js).
-      else if (pk.kind === 'briefcase') {
-        addMoney(S, pk.value, 'briefcase found');
-        if (audio) audio.cash();
-      } else if (pk.kind === 'wrench' || pk.kind === 'coffee') {
-        const msg = applyStreetPickup(S, pk, audio);
-        if (msg) addMessage(S, msg);
-        if (audio) audio.pickup();
-      }
-      S.pickups.splice(i, 1);
+  // Gang enemies: close in and shoot back.
+  for (let i = S.gang.length - 1; i >= 0; i--) {
+    const g = S.gang[i];
+    if (g.dead) continue;
+    const d = dist2d(g.x, g.z, px, pz);
+    const want = Math.atan2(px - g.x, pz - g.z);
+    g.heading = want;
+    if (d > 14) {
+      g.x += Math.sin(want) * 3.2 * dt;
+      g.z += Math.cos(want) * 3.2 * dt;
+    }
+    g.shootT -= dt;
+    if (g.shootT <= 0 && d < 55) {
+      g.shootT = 1.6 + Math.random();
+      gangShot(g, px, pz);
+    }
+    g.mesh.position.set(g.x, 0, g.z);
+    g.mesh.rotation.y = g.heading;
+    if (g.hp <= 0) {
+      g.dead = true;
+      W.scene.remove(g.mesh);
+      S.gang.splice(i, 1);
+      S.stats.vipersDown++;
+      S.money += 25;
+      addWanted(0); // killing gang members is not a police crime here
     }
   }
 }
 
-export function spawnPickups(S, rng, n) {
-  const kinds = ['cash', 'health', 'ammo'];
-  for (let i = 0; i < n; i++) {
-    const tx = rng.int(3, 56), ty = rng.int(3, 62);
-    const kind = kinds[i % kinds.length];
-    S.pickups.push({ x: tx * 48 + 24, y: ty * 48 + 24, kind, value: kind === 'cash' ? 50 : 0, bob: 0 });
+function meleeHit(w) {
+  const p = S.player;
+  const px = p.car ? p.car.x : p.x, pz = p.car ? p.car.z : p.z;
+  const hx = Math.sin(p.heading), hz = Math.cos(p.heading);
+  for (const g of S.gang) {
+    const dx = g.x - px, dz = g.z - pz;
+    if (Math.hypot(dx, dz) < w.range && dx * hx + dz * hz > 0) g.hp -= w.dmg;
   }
-  S.collect.total = S.pickups.filter((p) => p.kind === 'cash').length;
 }
 
-// Vera's hidden stash: gold drops tucked on pavements across the city.
-// Finding one pays $100; the HUD tracks how many are left.
-export function spawnStash(S, rng, n) {
-  const count = n || STASH_TOTAL;
-  for (let i = 0; i < count; i++) {
-    const p = sidewalkPoint(rng, S.city);
-    S.pickups.push({ x: p.x, y: p.y, kind: 'stash', value: STASH_REWARD, bob: rng.range(0, 6) });
+function fireShot(w, px, pz) {
+  // Shots travel horizontally from the player's gun toward where the
+  // camera faces: a camera ray would dive into the ground past the player,
+  // so the crosshair's horizontal bearing is what the bullet follows.
+  const dir = new THREE.Vector3(Math.sin(S.camYaw + Math.PI), 0, Math.cos(S.camYaw + Math.PI)).normalize();
+  const origin = new THREE.Vector3(px, 1.4, pz);
+  sfx.shoot();
+  scarePeds(px, pz, 45);
+  const pellets = w.pellets || 1;
+  for (let i = 0; i < pellets; i++) {
+    const d = dir.clone();
+    d.x += (Math.random() - 0.5) * 0.02;
+    d.z += (Math.random() - 0.5) * 0.02;
+    d.normalize();
+    const o = origin.clone();
+    // Hit test against gang, peds, cars (sphere approximations).
+    let bestT = w.range, bestHit = null, bestKind = null;
+    for (const g of S.gang) {
+      const t = raySphere(o, d, g.x, 1.2, g.z, 1.4);
+      if (t && t < bestT) { bestT = t; bestHit = g; bestKind = 'gang'; }
+    }
+    for (const car of S.cars) {
+      if (car.dead) continue;
+      const t = raySphere(o, d, car.x, 1.0, car.z, car.def.len / 2 + 0.5);
+      if (t && t < bestT) { bestT = t; bestHit = car; bestKind = 'car'; }
+    }
+    const end = o.clone().addScaledVector(d, bestT);
+    addTracer(o, end);
+    if (bestKind === 'gang') bestHit.hp -= w.dmg;
+    if (bestKind === 'car') {
+      bestHit.damage += w.dmg / 2;
+      if (bestHit.driver === 'player') S.health -= 2;
+      if (bestHit.type === 'police') addWanted(1);
+    }
+    if (!bestHit) {
+      // Stray shots in public draw heat.
+      if (Math.random() < 0.25) addWanted(1);
+    }
+  }
+  if (S.player.car) {
+    // Drive-by: shooting from a car is loud.
+    addWanted(0);
+  }
+}
+
+function gangShot(g, px, pz) {
+  const from = new THREE.Vector3(g.x, 1.4, g.z);
+  const to = new THREE.Vector3(px, 1.2, pz);
+  addTracer(from, to);
+  sfx.shoot();
+  const d = dist2d(g.x, g.z, px, pz);
+  if (Math.random() < clamp(0.5 - d / 160, 0.08, 0.5)) {
+    damagePlayer(8 + Math.random() * 8);
+  }
+}
+
+export function damagePlayer(n) {
+  if (S.armor > 0) {
+    const absorbed = Math.min(S.armor, n * 0.6);
+    S.armor -= absorbed; n -= absorbed;
+  }
+  S.health -= n;
+  if (S.health <= 0) {
+    S.health = 0;
+    S.mode = 'wasted';
+    sfx.fail();
+  }
+}
+
+function raySphere(o, d, cx, cy, cz, r) {
+  const ox = o.x - cx, oy = o.y - cy, oz = o.z - cz;
+  const b = ox * d.x + oy * d.y + oz * d.z;
+  const c = ox * ox + oy * oy + oz * oz - r * r;
+  const disc = b * b - c;
+  if (disc < 0) return null;
+  const t = -b - Math.sqrt(disc);
+  return t > 0 ? t : null;
+}
+
+function addTracer(a, b) {
+  const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.9 }));
+  W.scene.add(line);
+  W.tracers.push({ line, t: 0.09 });
+}
+
+export function updateTracers(dt) {
+  for (let i = W.tracers.length - 1; i >= 0; i--) {
+    const tr = W.tracers[i];
+    tr.t -= dt;
+    if (tr.t <= 0) { W.scene.remove(tr.line); W.tracers.splice(i, 1); }
   }
 }

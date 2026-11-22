@@ -1,21 +1,185 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Solmar Nights — an original open-world crime game in Solmar Bay: steal cars and bikes, dodge the SBPD, run eight story missions, race the streets, take gang turf, find hidden stash, hit stunt ramps, and watch day turn to night as rain rolls in.">
-<link rel="icon" href="data:,">
-<title>Solmar Nights — an open-world crime game in Solmar Bay</title>
+<title>Solmar Nights — a 3D open-world crime game</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1020; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1420; font-family: 'Segoe UI', system-ui, sans-serif; color: #fff; }
+  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hud { position: fixed; pointer-events: none; z-index: 10; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  .panel { background: rgba(12, 10, 18, .72); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 8px 10px; backdrop-filter: blur(2px); }
+  /* top-left vitals */
+  #hud-vitals { top: 12px; left: 12px; min-width: 250px; }
+  #hud-money { font-size: 30px; font-weight: 800; color: #7dff8a; letter-spacing: 1px; }
+  #hud-stars { font-size: 22px; color: #ffd23a; letter-spacing: 3px; }
+  #hud-stars.hot { color: #ff5a4a; animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { opacity: 1; } to { opacity: .55; } }
+  .bar-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; font-weight: 700; }
+  .bar { flex: 1; height: 10px; background: rgba(255,255,255,.18); border-radius: 5px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  #hud-health-bar { background: #4ade5a; } #hud-armor-bar { background: #5aa8ff; } #hud-stamina-bar { background: #ffd23a; }
+  #hud-clock { font-size: 15px; font-weight: 700; } #hud-day { font-size: 12px; color: #ffb37a; }
+  #hud-weather { font-size: 12px; }
+  .counters { display: flex; gap: 10px; font-size: 11px; font-weight: 700; color: #ffd23a; margin-top: 5px; }
+  /* objective */
+  #hud-objective-wrap { top: 12px; left: 50%; transform: translateX(-50%); text-align: center; max-width: 560px; }
+  #hud-objective { font-size: 16px; font-weight: 800; }
+  #hud-mission-clock { font-size: 22px; font-weight: 800; color: #ffd23a; }
+  /* dispatch board */
+  #hud-dispatch { top: 12px; right: 12px; width: 290px; display: none; }
+  #hud-dispatch h3 { font-size: 12px; letter-spacing: 2px; color: #ff8a7a; margin-bottom: 6px; }
+  .unit { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .uname { font-weight: 800; color: #fff; } .urole { color: #ffb37a; } .udist { color: #9fd8ff; }
+  .unit.more { color: #ff8a7a; font-weight: 700; }
+  /* weapons */
+  #hud-weapons { right: 12px; top: 42%; display: flex; flex-direction: column; gap: 4px; }
+  .wslot { display: flex; gap: 8px; align-items: center; background: rgba(12,10,18,.72); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; padding: 4px 8px; font-size: 12px; min-width: 150px; }
+  .wslot.active { border-color: #ffd23a; background: rgba(60,45,10,.85); }
+  .wslot.locked { opacity: .55; } .wslot.locked .wname { color: #ff8a7a; }
+  .wkey { font-weight: 800; color: #ffd23a; } .wname { font-weight: 800; flex: 1; } .wammo { color: #9fd8ff; }
+  /* bottom-right: radio + speedo */
+  #hud-drive { right: 12px; bottom: 12px; text-align: right; }
+  #hud-radio { font-size: 13px; font-weight: 800; color: #ff9ad5; }
+  #hud-radio-track { font-size: 12px; color: #ffd23a; margin-bottom: 6px; }
+  #hud-speed { font-size: 64px; font-weight: 900; line-height: 1; color: #fff; }
+  #hud-speed-unit { font-size: 13px; color: #ccc; }
+  #hud-car-name { font-size: 15px; font-weight: 800; } #hud-car-cond { font-size: 12px; font-weight: 700; }
+  #hud-nitro-wrap { width: 180px; height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; margin: 6px 0 0 auto; overflow: hidden; }
+  #hud-nitro { height: 100%; background: #ff7a2a; width: 0%; }
+  /* bottom-left: minimap + respect + crew */
+  #hud-left { left: 12px; bottom: 12px; }
+  #hud-minimap { width: 200px; height: 200px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); background: #20242e; display: block; }
+  #hud-area { font-size: 13px; font-weight: 800; color: #ffd23a; margin-top: 4px; }
+  #hud-respect { font-size: 12px; font-weight: 700; margin-top: 4px; }
+  #hud-respect-wrap { width: 200px; height: 8px; background: rgba(255,255,255,.18); border-radius: 4px; overflow: hidden; margin-top: 2px; }
+  #hud-respect-bar { height: 100%; background: linear-gradient(90deg, #c03aff, #ff7ad5); }
+  #hud-crew { display: flex; gap: 6px; margin-top: 6px; }
+  .crew { background: rgba(12,10,18,.72); border: 1px solid rgba(255,255,255,.14); border-radius: 6px; padding: 4px 6px; font-size: 11px; text-align: center; min-width: 62px; }
+  .crew.ready { border-color: #4ade5a; } .crew .ckey { font-weight: 800; color: #ffd23a; display: block; }
+  .crew .cname { font-weight: 800; display: block; } .crew .ccd { color: #9fd8ff; }
+  /* dialogue */
+  #hud-dialogue { left: 50%; bottom: 18px; transform: translateX(-50%); display: none; align-items: center; gap: 10px; max-width: 640px; background: rgba(12,10,18,.85); border: 1px solid rgba(255,255,255,.2); border-radius: 10px; padding: 10px 14px; }
+  #hud-portrait { width: 72px; height: 72px; border-radius: 8px; border: 2px solid #ffd23a; }
+  #hud-dlg-name { font-size: 13px; font-weight: 800; color: #ffd23a; }
+  #hud-dlg-line { font-size: 15px; line-height: 1.35; }
+  /* banner + countdown */
+  #hud-banner { left: 50%; top: 26%; transform: translateX(-50%); text-align: center; display: none; }
+  #hud-banner-text { font-size: 42px; font-weight: 900; letter-spacing: 2px; color: #ffd23a; text-shadow: 0 2px 12px rgba(0,0,0,.9); }
+  #hud-banner-sub { font-size: 17px; font-weight: 700; }
+  #hud-race-count { left: 50%; top: 38%; transform: translateX(-50%); font-size: 90px; font-weight: 900; color: #ffd23a; display: none; }
+  /* full screens */
+  .screen { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; background: linear-gradient(180deg, rgba(20,10,30,.55), rgba(20,10,30,.85)); }
+  .screen h1 { font-size: 64px; font-weight: 900; letter-spacing: 4px; color: #ffb37a; text-shadow: 0 4px 30px rgba(255,120,40,.6); }
+  .screen h2 { font-size: 20px; font-weight: 700; color: #ffd23a; margin: 8px 0 18px; }
+  .screen p { font-size: 15px; color: #e8e8e8; max-width: 620px; line-height: 1.6; }
+  .screen .keys { margin-top: 18px; font-size: 13px; color: #bbb; line-height: 1.9; }
+  .screen .keys b { color: #ffd23a; }
+  #screen-busted h1 { color: #5aa8ff; } #screen-wasted h1 { color: #ff5a4a; }
+  .joblist { margin-top: 14px; font-size: 13px; color: #ffd9a0; line-height: 1.8; text-align: left; }
+  #crosshair { left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 20px; color: rgba(255,255,255,.85); display: none; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Solmar Nights: explore Solmar Bay on foot and by car, steal cars and bikes, dodge the police, run eight story missions, race the streets and take gang turf, find hidden stash and hit stunt ramps as day turns to night"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game-canvas"></canvas>
+<div id="crosshair" class="hud">+</div>
+
+<div id="hud-vitals" class="hud panel">
+  <div id="hud-money">$120</div>
+  <div id="hud-stars">☆☆☆☆☆</div>
+  <div class="bar-row">HP <div class="bar"><div id="hud-health-bar" style="width:100%"></div></div><span id="hud-health">100</span></div>
+  <div class="bar-row">ARMOR <div class="bar"><div id="hud-armor-bar" style="width:0%"></div></div><span id="hud-armor">0</span></div>
+  <div class="bar-row">SPRINT <div class="bar"><div id="hud-stamina-bar" style="width:100%"></div></div><span id="hud-stamina">100</span></div>
+  <div class="bar-row"><span id="hud-clock">17:40</span><span id="hud-day">DAY 1</span><span id="hud-weather">☀️ DUSK</span></div>
+  <div class="counters"><span id="hud-jobs">JOBS 0/8</span><span id="hud-stash">◆ STASH 0/10</span><span id="hud-turf">⬢ TURF 0/5</span></div>
+</div>
+
+<div id="hud-objective-wrap" class="hud">
+  <div id="hud-objective">Press Enter to start</div>
+  <div id="hud-mission-clock"></div>
+</div>
+
+<div id="hud-dispatch" class="hud panel">
+  <h3>SBPD DISPATCH — <span id="hud-dispatch-count"></span> UNITS</h3>
+  <div id="hud-dispatch-list"></div>
+</div>
+
+<div id="hud-weapons" class="hud"></div>
+
+<div id="hud-drive" class="hud">
+  <div id="hud-radio">♪ SOLMAR FM 98.6</div>
+  <div id="hud-radio-track">Neon Tideline</div>
+  <div><span id="hud-speed">0</span> <span id="hud-speed-unit">KM/H</span></div>
+  <div id="hud-car-name">ON FOOT</div>
+  <div id="hud-car-cond"></div>
+  <div id="hud-nitro-wrap"><div id="hud-nitro"></div></div>
+</div>
+
+<div id="hud-left" class="hud">
+  <canvas id="hud-minimap" width="200" height="200"></canvas>
+  <div id="hud-area">DOWNTOWN</div>
+  <div id="hud-respect">RESPECT LV 1 · NOBODY — 0 RP</div>
+  <div id="hud-respect-wrap"><div id="hud-respect-bar" style="width:0%"></div></div>
+  <div id="hud-crew"></div>
+</div>
+
+<div id="hud-dialogue" class="hud">
+  <canvas id="hud-portrait" width="96" height="96"></canvas>
+  <div><div id="hud-dlg-name">VERA SOLANO</div><div id="hud-dlg-line"></div></div>
+</div>
+
+<div id="hud-banner" class="hud">
+  <div id="hud-banner-text"></div>
+  <div id="hud-banner-sub"></div>
+</div>
+<div id="hud-race-count" class="hud"></div>
+
+<div id="screen-title" class="screen">
+  <h1>SOLMAR NIGHTS</h1>
+  <h2>A 3D open-world crime story in Solmar Bay</h2>
+  <p>You are Rook Marlow, back in the city that raised you. The Rust Vipers own the docks,
+  the SBPD owns the streets, and Vera Solano owns the jobs. Steal cars, outrun the law,
+  run eight story jobs, win street races, take the turfs — and own the Bay.</p>
+  <div class="joblist">
+    8 STORY JOBS · 7 STREET RACES · 5 GANG TURFS · COURIER RUNS · DAILY CHALLENGES<br>
+    HELICOPTER CHASES · SBPD DISPATCH · RADIO · CREW SKILLS · GARAGE
+  </div>
+  <p style="margin-top:16px;font-size:18px;font-weight:800;color:#ffd23a">PRESS ENTER TO START</p>
+  <div class="keys"><b>WASD</b> move / drive &nbsp; <b>E</b> steal car &nbsp; <b>Mouse</b> aim &amp; shoot &nbsp; <b>Click</b> fire<br>
+  <b>N</b> next job &nbsp; <b>V</b> race &nbsp; <b>C</b> courier &nbsp; <b>G</b> horn / garage &nbsp; <b>B</b> coffee &nbsp; <b>R</b> radio<br>
+  <b>Z X F</b> crew skills &nbsp; <b>1–7</b> weapons &nbsp; <b>H</b> save &nbsp; <b>L</b> load &nbsp; <b>P</b> pause</div>
+</div>
+
+<div id="screen-pause" class="screen">
+  <h1>PAUSED</h1>
+  <h2 id="pause-stats">SOLMAR BAY — DAY 1</h2>
+  <p>Jobs done, cash, respect, turfs and completion live here while you catch your breath.</p>
+  <p style="margin-top:14px;font-size:16px">Press <b style="color:#ffd23a">P</b> to keep playing &nbsp;·&nbsp; <b style="color:#ffd23a">H</b> save &nbsp;·&nbsp; <b style="color:#ffd23a">L</b> load</p>
+</div>
+
+<div id="screen-busted" class="screen">
+  <h1>BUSTED</h1>
+  <h2>The SBPD got you. $150 bail, and the heat resets.</h2>
+  <p style="margin-top:10px;font-size:16px">Press <b style="color:#ffd23a">Enter</b> to get back out there</p>
+</div>
+
+<div id="screen-wasted" class="screen">
+  <h1>WASTED</h1>
+  <h2>Not like this. Not in your own city.</h2>
+  <p style="margin-top:10px;font-size:16px">Press <b style="color:#ffd23a">Enter</b> to wake up at the hospital</p>
+</div>
+
+<div id="screen-complete" class="screen">
+  <h1>SOLMAR NIGHTS</h1>
+  <h2>Story complete — Rook owns the Bay.</h2>
+  <p>Eight jobs, the Vipers pushed back, the SBPD outrun. Solmar Bay is yours now.</p>
+  <p style="margin-top:10px;font-size:16px">Press <b style="color:#ffd23a">Enter</b> to keep free-roaming</p>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

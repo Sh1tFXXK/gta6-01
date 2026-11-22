@@ -1,67 +1,91 @@
-// pedestrians.js — people walking the pavements of Solmar Bay, fleeing danger.
-// One job: pedestrian life.
-import { TILE, CITY_SIZE, PED_NAMES, PED_SHIRTS } from './config.js';
-import { clamp, dist, angleTo } from './random.js';
-import { sidewalkPoint, circleHitsBuilding } from './city.js';
-import { spawnBlood } from './player.js';
+// Pedestrians for Solmar Nights 3D: walkers, joggers, tourists and
+// vendors who idle, chat, and flee when shots go off.
 
-export function spawnPeds(S, rng, n) {
-  for (let i = 0; i < n; i++) {
-    const p = sidewalkPoint(rng, S.city);
+import * as THREE from 'three';
+import { S, W } from './state.js';
+import { mulberry32, pick, dist2d } from './random.js';
+import { collideCircle } from './city.js';
+
+const SHIRTS = [0xd8d8d8, 0xe8a03a, 0x4a8a5a, 0x8a4a6a, 0x3a6a8a, 0xc25a4a, 0x7a5a9a];
+const KINDS = ['walker', 'jogger', 'tourist', 'vendor'];
+
+export function makePedMesh(kind, shirtColor) {
+  const g = new THREE.Group();
+  const skinTones = [0xc98a5e, 0x8a5a3a, 0xe8b88a];
+  const skin = new THREE.MeshLambertMaterial({ color: skinTones[Math.floor(Math.random() * skinTones.length)] });
+  const shirt = new THREE.MeshLambertMaterial({ color: shirtColor });
+  const pants = new THREE.MeshLambertMaterial({ color: 0x2a2c34 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.8, 0.32), shirt);
+  body.position.y = 1.0; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), skin);
+  head.position.y = 1.65; g.add(head);
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.22), pants);
+  legL.position.set(-0.14, 0.32, 0); g.add(legL);
+  const legR = legL.clone(); legR.position.x = 0.14; g.add(legR);
+  if (kind === 'tourist') {
+    const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.12, 10), new THREE.MeshLambertMaterial({ color: 0xe8d8a0 }));
+    hat.position.y = 1.85; g.add(hat);
+  }
+  if (kind === 'vendor') {
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.5), new THREE.MeshLambertMaterial({ color: 0x8a5a2a }));
+    tray.position.set(0, 1.15, 0.35); g.add(tray);
+  }
+  g.userData.legL = legL; g.userData.legR = legR;
+  return g;
+}
+
+export function scatterPeds() {
+  const rng = mulberry32(S.seed + 21);
+  for (let i = 0; i < 22; i++) {
+    const kind = KINDS[Math.floor(rng() * 3)]; // walkers, joggers, tourists
+    const x = (rng() * 2 - 1) * 480, z = (rng() * 2 - 1) * 480;
+    const mesh = makePedMesh(kind, SHIRTS[Math.floor(rng() * SHIRTS.length)]);
+    mesh.position.set(x, 0, z);
+    W.scene.add(mesh);
     S.peds.push({
-      x: p.x, y: p.y, angle: rng.range(0, Math.PI * 2),
-      speed: rng.range(28, 52), name: rng.pick(PED_NAMES),
-      shirt: rng.pick(PED_SHIRTS), hp: 100, flee: 0,
-      target: null, panic: 0, walkPhase: rng.range(0, 6),
-      // Round 2: a quarter of peds stand around chatting instead of walking,
-      // so the pavements feel lived-in rather than endlessly marching.
-      idle: rng.chance(0.25) ? rng.range(4, 12) : 0,
+      kind, mesh, x, z,
+      heading: rng() * Math.PI * 2,
+      speed: kind === 'jogger' ? 3.4 : 1.4 + rng(),
+      idleT: rng() * 4, chat: rng() < 0.25, fleeT: 0, walkT: 0,
     });
   }
 }
 
-export function updatePeds(S, rng, dt) {
-  const px = S.player.x, py = S.player.y;
+export function updatePeds(dt) {
+  const p = S.player;
+  const px = p.car ? p.car.x : p.x, pz = p.car ? p.car.z : p.z;
   for (const ped of S.peds) {
-    if (ped.hp <= 0) continue;
-    ped.walkPhase += dt * 6;
-    // Flee from the player when they are violent or too close in a car,
-    // and from recent gunfire nearby — a shot sends the whole block running.
-    const pd = dist(ped.x, ped.y, px, py);
-    const car = S.player.inCar;
-    const gunfireNear = S.time - S.gunfireT < 1.5 && pd < 260;
-    if ((car && Math.abs(car.speed) > 120 && pd < 130) || ped.flee > 0 || S.rampage.active || gunfireNear) {
-      ped.flee = Math.max(ped.flee, 1.5);
-      ped.idle = 0;
-      const away = angleTo(px, py, ped.x, ped.y);
-      ped.angle = away;
-      const nx = ped.x + Math.cos(away) * 120 * dt, ny = ped.y + Math.sin(away) * 120 * dt;
-      if (!circleHitsBuilding(S.city, nx, ny, 10)) { ped.x = nx; ped.y = ny; }
-      ped.flee -= dt;
-      continue;
+    const d = dist2d(ped.x, ped.z, px, pz);
+    if (ped.fleeT > 0) {
+      ped.fleeT -= dt;
+      const away = Math.atan2(ped.x - px, ped.z - pz);
+      ped.heading = away;
+      const nx = ped.x + Math.sin(away) * 6 * dt;
+      const nz = ped.z + Math.cos(away) * 6 * dt;
+      const f = collideCircle(nx, nz, 0.5);
+      ped.x = f.x; ped.z = f.z;
+    } else if (ped.idleT > 0) {
+      ped.idleT -= dt;
+      if (ped.idleT <= 0) ped.heading = Math.random() * Math.PI * 2;
+    } else {
+      ped.walkT += dt;
+      const nx = ped.x + Math.sin(ped.heading) * ped.speed * dt;
+      const nz = ped.z + Math.cos(ped.heading) * ped.speed * dt;
+      const f = collideCircle(nx, nz, 0.5);
+      if (f.x !== nx || f.z !== nz) ped.heading += Math.PI / 2 + Math.random();
+      ped.x = f.x; ped.z = f.z;
+      if (Math.random() < dt * 0.05) ped.idleT = 2 + Math.random() * 4;
     }
-    // Chatting peds stand still, facing a random direction, until idle ends.
-    if (ped.idle > 0) {
-      ped.idle -= dt;
-      ped.walkPhase += dt * 0.5;
-      continue;
-    }
-    if (!ped.target || dist(ped.x, ped.y, ped.target.x, ped.target.y) < 24) {
-      ped.target = sidewalkPoint(rng, S.city);
-    }
-    const want = angleTo(ped.x, ped.y, ped.target.x, ped.target.y);
-    ped.angle = want;
-    const nx = ped.x + Math.cos(want) * ped.speed * dt;
-    const ny = ped.y + Math.sin(want) * ped.speed * dt;
-    if (!circleHitsBuilding(S.city, nx, ny, 10)) { ped.x = nx; ped.y = ny; }
-    else ped.target = null;
-    ped.x = clamp(ped.x, 16, CITY_SIZE - 16); ped.y = clamp(ped.y, 16, CITY_SIZE - 16);
+    ped.mesh.position.set(ped.x, 0, ped.z);
+    ped.mesh.rotation.y = ped.heading;
+    const swing = ped.fleeT > 0 ? 11 : 6;
+    ped.mesh.userData.legL.rotation.x = Math.sin(ped.walkT * swing) * 0.55;
+    ped.mesh.userData.legR.rotation.x = -Math.sin(ped.walkT * swing) * 0.55;
   }
-  // Dead peds fade out (they stay as a reminder, then despawn).
-  for (let i = S.peds.length - 1; i >= 0; i--) {
-    if (S.peds[i].hp <= 0) {
-      S.peds[i].deadT = (S.peds[i].deadT || 0) + dt;
-      if (S.peds[i].deadT > 6) S.peds.splice(i, 1);
-    }
+}
+
+export function scarePeds(x, z, radius = 40) {
+  for (const ped of S.peds) {
+    if (dist2d(ped.x, ped.z, x, z) < radius) ped.fleeT = 2.5 + Math.random() * 2;
   }
 }

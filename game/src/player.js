@@ -1,120 +1,111 @@
-// player.js — Rook Marlow on foot: walking, aiming, entering and exiting cars.
-// One job: the player character. Driving physics live in vehicles.js.
-import { TILE, CITY_SIZE, STAMINA_MAX, STAMINA_DRAIN, STAMINA_REGEN } from './config.js';
-import { clamp, angleTo } from './random.js';
-import { circleHitsBuilding } from './city.js';
-import { addMessage } from './state.js';
+// Rook Marlow on foot: third-person movement, sprint stamina,
+// stealing cars, and the player character mesh.
 
-export function updatePlayerOnFoot(S, input, dt, audio) {
+import * as THREE from 'three';
+import { S, W } from './state.js';
+import { collideCircle } from './city.js';
+import { clamp, angDiff } from './random.js';
+import { moveInput } from './input.js';
+import { nearestCar } from './vehicles.js';
+import { sfx } from './audio.js';
+
+export function makePlayerMesh() {
+  const g = new THREE.Group();
+  const skin = new THREE.MeshLambertMaterial({ color: 0xc98a5e });
+  const jacket = new THREE.MeshLambertMaterial({ color: 0x2a4a6a });
+  const pants = new THREE.MeshLambertMaterial({ color: 0x22242a });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.85, 0.36), jacket);
+  body.position.y = 1.05; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), skin);
+  head.position.y = 1.72; g.add(head);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.1, 10), new THREE.MeshLambertMaterial({ color: 0xd84a3a }));
+  cap.position.y = 1.92; g.add(cap);
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.7, 0.26), pants);
+  legL.position.set(-0.16, 0.35, 0); g.add(legL);
+  const legR = legL.clone(); legR.position.x = 0.16; g.add(legR);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.2), jacket);
+  armL.position.set(-0.42, 1.05, 0); g.add(armL);
+  const armR = armL.clone(); armR.position.x = 0.42; g.add(armR);
+  g.userData.legL = legL; g.userData.legR = legR;
+  g.userData.armL = armL; g.userData.armR = armR;
+  return g;
+}
+
+export function initPlayer() {
+  W.playerMesh = makePlayerMesh();
+  W.playerMesh.position.set(S.player.x, 0, S.player.z);
+  W.scene.add(W.playerMesh);
+}
+
+export function updatePlayer(dt) {
   const p = S.player;
-  if (p.inCar || p.dead) return;
-  const k = input.keys;
-  let mx = (k['d'] || k['arrowright'] ? 1 : 0) - (k['a'] || k['arrowleft'] ? 1 : 0);
-  let my = (k['s'] || k['arrowdown'] ? 1 : 0) - (k['w'] || k['arrowup'] ? 1 : 0);
-  const moving = !!(mx || my);
-  // Sprint (Shift) is faster but drains stamina; empty stamina means walking
-  // until it refills a little. Stamina refills while walking or standing.
-  const wantSprint = !!k['shift'] && p.stamina > 1;
-  const run = wantSprint ? 1.6 : 1;
-  if (wantSprint && moving) p.stamina = Math.max(0, p.stamina - STAMINA_DRAIN * dt);
-  else p.stamina = Math.min(STAMINA_MAX, p.stamina + STAMINA_REGEN * dt);
-  const len = Math.hypot(mx, my) || 1;
-  const spd = 170 * run;
-  const nx = p.x + (mx / len) * spd * dt;
-  const ny = p.y + (my / len) * spd * dt;
-  if (moving) {
-    if (!circleHitsBuilding(S.city, nx, p.y, 12)) p.x = nx;
-    if (!circleHitsBuilding(S.city, p.x, ny, 12)) p.y = ny;
-    p.angle = Math.atan2(my, mx);
+  if (p.car) return; // driving is handled by vehicles.js
+  const input = moveInput();
+  const sprinting = (window.__shift || false) && S.stamina > 0 && (input.f !== 0 || input.s !== 0);
+  const speed = sprinting ? 9.5 : 5.2;
+  if (sprinting) {
+    S.stamina = Math.max(0, S.stamina - 22 * dt);
+    S.stats.sprintM += speed * dt;
+  } else {
+    S.stamina = Math.min(100, S.stamina + 14 * dt);
   }
-  p.x = clamp(p.x, 16, CITY_SIZE - 16);
-  p.y = clamp(p.y, 16, CITY_SIZE - 16);
-  // Aim at the mouse (screen -> world).
-  const wx = S.cam.x + input.mouse.x, wy = S.cam.y + input.mouse.y;
-  p.aimAngle = angleTo(p.x, p.y, wx, wy);
-  p.punchCd = Math.max(0, p.punchCd - dt);
-  p.shootCd = Math.max(0, p.shootCd - dt);
-  if (input.consume('e')) tryEnterCar(S, audio);
-  if (input.consume('f')) punch(S, audio);
+  // Movement is relative to the camera yaw.
+  const cy = S.camYaw;
+  const fx = -Math.sin(cy), fz = -Math.cos(cy);
+  const sx = -Math.cos(cy), sz = Math.sin(cy);
+  let mx = fx * input.f + sx * input.s;
+  let mz = fz * input.f + sz * input.s;
+  const len = Math.hypot(mx, mz);
+  if (len > 0.01) {
+    mx /= len; mz /= len;
+    const want = Math.atan2(mx, mz);
+    p.heading += angDiff(p.heading, want) * Math.min(1, dt * 12);
+    const nx = p.x + mx * speed * dt;
+    const nz = p.z + mz * speed * dt;
+    const fixed = collideCircle(nx, nz, 0.6);
+    p.x = fixed.x; p.z = fixed.z;
+    p.speed = speed;
+    // Walk-cycle swing.
+    const t = performance.now() / 1000 * (sprinting ? 11 : 7);
+    W.playerMesh.userData.legL.rotation.x = Math.sin(t) * 0.6;
+    W.playerMesh.userData.legR.rotation.x = -Math.sin(t) * 0.6;
+    W.playerMesh.userData.armL.rotation.x = -Math.sin(t) * 0.5;
+    W.playerMesh.userData.armR.rotation.x = Math.sin(t) * 0.5;
+  } else {
+    p.speed = 0;
+    W.playerMesh.userData.legL.rotation.x *= 0.8;
+    W.playerMesh.userData.legR.rotation.x *= 0.8;
+    W.playerMesh.userData.armL.rotation.x *= 0.8;
+    W.playerMesh.userData.armR.rotation.x *= 0.8;
+  }
+  W.playerMesh.position.set(p.x, 0, p.z);
+  W.playerMesh.rotation.y = p.heading;
 }
 
-export function nearestCar(S, x, y, maxD) {
-  let best = null, bd = maxD * maxD;
-  for (const c of S.cars) {
-    if (c.dead) continue;
-    const dx = c.x - x, dy = c.y - y, d = dx * dx + dy * dy;
-    if (d < bd) { bd = d; best = c; }
-  }
-  return best;
-}
-
-export function tryEnterCar(S, audio) {
+export function tryEnterCar() {
   const p = S.player;
-  const car = nearestCar(S, p.x, p.y, 64);
-  if (!car) { addMessage(S, 'No car close by — walk up to one and press E.'); return; }
-  p.inCar = car; car.driver = 'player'; car.parked = false;
-  p.x = car.x; p.y = car.y;
-  S.stats.carsStolen++;
-  if (car.driverWas !== 'player') raiseWanted(S, 1, car.type === 'bike' ? 'Bike stolen!' : 'Car stolen!');
-  if (audio) audio.pickup();
-  addMessage(S, car.type === 'bike' ? `On the ${car.typeName}. Drive with W A S D.` : `Got in the ${car.typeName}. Drive with W A S D.`);
-}
-
-export function exitCar(S) {
-  const p = S.player, car = p.inCar;
+  if (p.car) {
+    // Exit the car.
+    const car = p.car;
+    car.driver = null;
+    p.car = null; p.onFoot = true;
+    p.x = car.x + Math.cos(car.heading) * 3; p.z = car.z - Math.sin(car.heading) * 3;
+    p.heading = car.heading;
+    W.playerMesh.visible = true;
+    return;
+  }
+  const car = nearestCar(p.x, p.z, 6);
   if (!car) return;
-  p.inCar = null; car.driver = null; car.parked = true;
-  const side = { x: p.x + Math.cos(car.angle + Math.PI / 2) * 34, y: p.y + Math.sin(car.angle + Math.PI / 2) * 34 };
-  if (!circleHitsBuilding(S.city, side.x, side.y, 12)) { p.x = side.x; p.y = side.y; }
-  else { p.x = car.x - 34; p.y = car.y; }
-  addMessage(S, 'On foot. Press E near a car to get in.');
-}
-
-export function punch(S, audio) {
-  const p = S.player;
-  if (p.punchCd > 0 || p.inCar) return;
-  p.punchCd = 0.45;
-  if (audio) audio.punch();
-  const reach = 34, ax = p.x + Math.cos(p.aimAngle ?? p.angle) * reach, ay = p.y + Math.sin(p.aimAngle ?? p.angle) * reach;
-  for (const e of S.enemies) {
-    if (e.dead) continue;
-    if (Math.hypot(e.x - ax, e.y - ay) < 30) { hurtEnemy(S, e, 34, audio); return; }
+  const wasParked = car.parked;
+  car.driver = 'player';
+  car.parked = false;
+  p.car = car; p.onFoot = false;
+  W.playerMesh.visible = false;
+  if (wasParked || car.type === 'police') {
+    // Stealing a parked car (or a cop car) draws heat.
+    S.wanted = Math.max(S.wanted, 1);
+    S.wantedHeat = 100;
+    S.stats.carsStolen++;
   }
-  for (const ped of S.peds) {
-    if (Math.hypot(ped.x - ax, ped.y - ay) < 26) {
-      ped.flee = 3; ped.hp -= 20; raiseWanted(S, 1, 'Assault!');
-      spawnBlood(S, ped.x, ped.y);
-    }
-  }
-}
-
-export function hurtEnemy(S, e, dmg, audio) {
-  e.hp -= dmg;
-  spawnBlood(S, e.x, e.y);
-  if (e.hp <= 0 && !e.dead) {
-    e.dead = true; S.mission.kills++; S.rampage.kills++;
-    addMoney(S, 25, 'gang member down');
-    if (audio) audio.pickup();
-    spawnExplosion(S, e.x, e.y, 0.4);
-  }
-}
-
-export function spawnBlood(S, x, y) {
-  for (let i = 0; i < 8; i++) {
-    S.particles.push({ x, y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, life: 0.5, max: 0.5, color: '#c0392b', size: 3 });
-  }
-}
-export function spawnExplosion(S, x, y, scale) {
-  S.cam.shake = Math.max(S.cam.shake, 10 * scale);
-  for (let i = 0; i < 22; i++) {
-    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 220 * scale;
-    S.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.7, max: 0.7, color: ['#ff9f1c', '#ff5e3a', '#555'][i % 3], size: 4 + Math.random() * 5 });
-  }
-  S.flash = 0.12;
-}
-
-export function raiseWanted(S, n, why) {
-  S.wanted = Math.min(5, S.wanted + n);
-  S.wantedHeat = 1;
-  if (why) addMessage(S, why + `  Wanted: ${'★'.repeat(S.wanted)}`);
+  sfx.click();
 }

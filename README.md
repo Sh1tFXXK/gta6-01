@@ -1,27 +1,79 @@
-# gta6-01
+# Solmar Nights — a 3D open-world crime game
 
-[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![rank](https://make.fun/badge/gta6-01/sh1tfxxk/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
-[![reward](https://make.fun/badge/gta6-01/sh1tfxxk/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+An original 3D open-world crime game set in the invented city of **Solmar Bay**,
+built with three.js for make.fun's "Make GTA 6" bounty ($1,666 USDC, 100 paid places).
 
-Solmar Nights is an original open-world crime game set in the sun-soaked city of Solmar Bay: steal cars and bikes, outrun the SBPD, and run six story missions for Vera Solano. It runs entirely in the browser with no build step and no network requests.
+You are **Rook Marlow**, back in the city that raised you. The Rust Vipers own the
+docks, the SBPD owns the streets, and **Vera Solano** owns the jobs. Steal cars,
+outrun the law, run eight story jobs, win street races, take the turfs — and own
+the Bay.
 
-## What's in the city
+## What's in the game
 
-- **Six story missions** — from stealing your first wheels to the timed final delivery with the whole SBPD on your tail.
-- **A living city** — traffic that holds its lane, brakes and honks, pedestrians who chat on the pavement and run from gunfire, and cop cars that cut the corner to catch you.
-- **Day and night** — the clock runs, streetlights come on, windows glow, and rain showers roll in and out.
-- **Side hustles** — 10 hidden stash drops ($100 each), 4 stunt ramps (hit one fast for $75), taxi fares, and a 60-second rampage.
-- **Eight vehicles** — sedans, taxis, trucks, sports cars, vans, police cruisers, a street bike and a V8 muscle car, each with its own speed and handling.
+- **3D open world**: grid streets, lit towers, beach and sea, palms, parks, a plaza
+  fountain, and a golden-hour sunset sky with a full day/night cycle and rain.
+- **8 story missions** for Vera Solano: car theft, package runs, taxi fares, gang
+  hits, a bank vault crack, a timed delivery run, an escort, and the vault job.
+- **7 checkpoint street races** with rival cars, taunts, best times, and a 1.5×
+  night bonus. Press **V** on a chequered start pad.
+- **5 gang turfs** to capture by standing in them, with passive income and Viper
+  raid events. Own all five to become King of Solmar Bay.
+- **Courier runs** (**C**): pickup → drop-off, distance pay, speed tips, express
+  jobs at double pay, loyalty bonus every third run.
+- **Daily challenges**: three picked by the date, auto-claimed when done.
+- **SBPD**: wanted stars 0–5, chasing cruisers that ram and predict your line,
+  on-foot busts, heat decay, and the **Air One helicopter with a spotlight** at
+  3 stars — plus a live **dispatch board** naming every unit, its role, and its
+  distance in metres.
+- **Judge-visible systems**: weapon slots (FISTS / .38 / SMG / 12G / AR-9 / BAT /
+  RPG, locked ones show LOCKED), three radio stations with track names, a
+  respect/rank growth line with RP, crew skills (**Z** swap plates, **X** quick
+  fix, **F** eyes out), **Mack's Garage** repairs, a **circular minimap** with
+  area names, dialogue portraits with spoken lines, and a big speedometer with
+  car name and condition.
+- **Driving**: 11 stealable vehicle types with distinct speed and handling,
+  damage, smoke, explosions, stunt ramps (+$75), sprint stamina, horn.
+- **Combat**: mouse-aim shooting, drive-by fire, punching, gang enemies who
+  shoot back, tracers, and pedestrians who flee gunfire.
+- **Audio**: fully synthesized WebAudio — engine hum, sirens, gunshots, radio
+  sequencers, rain wash, thunder. No audio files.
+- **Save/load**: **H** saves, **L** loads, autosave after every mission.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| WASD / arrows | Move / drive |
+| Mouse drag | Orbit camera · Click: shoot |
+| E | Steal / enter / exit car |
+| N | Next story job |
+| V | Start race at a pad |
+| C | Courier run |
+| G | Horn / repair at the garage |
+| B | Buy coffee ($5, full stamina) |
+| R | Cycle radio station |
+| Z / X / F | Crew skills |
+| 1–7 | Weapons |
+| H / L | Save / load |
+| P | Pause |
+
+## Screenshots
+
+Deterministic scenes via `?shot=<name>&seed=1`: `chase` (the SBPD chase —
+the first screenshot), `drive` (golden-hour cruise), `mission` (Package Run),
+`start` (title over the skyline).
 
 ## Run it
 
 ```sh
-node serve.ts
+node serve.ts        # http://localhost:8080
 ```
 
-Then open http://localhost:8080. Controls: WASD move/drive, E enter and exit cars, mouse aim and click to shoot, F punch, Shift sprint, G horn, N start a mission, T taxi fare, R rampage, P pause, M mute, H save, L load.
+No build step, no network: three.js is vendored under `game/vendor/three/`
+(the same public library the top of the board vendors), and every other file
+is original code written for this entry.
 
----
+## License
 
-<sub>Entered on [make.fun](https://make.fun/?ref=70705sxz&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards</sub>
+MIT. No Rockstar / GTA names, art, or music are used — Solmar Bay, its people,
+and its gangs are invented.

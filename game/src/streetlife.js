@@ -1,150 +1,112 @@
-// streetlife.js — new faces and new rides for Solmar Bay. One job: make the
-// city feel bigger without touching the old systems.
-//   * Two new cars (a long limo and a pickup truck) join traffic and parking.
-//   * Three new pedestrian kinds: joggers who run the beach road, tourists
-//     who stroll and gawp, and a street vendor who never moves from his cart.
-//   * Three new pickups: a wrench (repairs your car), a coffee (refills
-//     sprint stamina) and a briefcase (a little walking-around money).
-// Pickup effects live in combat.js (updatePickups) and their drawing in
-// render.js (drawPickups); this file only spawns them.
-import { TILE } from './config.js';
-import { addMessage } from './state.js';
-import { sidewalkPoint } from './city.js';
-import { makeCar } from './vehicles.js';
+// Street life for Solmar Nights 3D: stash cash drops, wrench / coffee /
+// briefcase pickups, and food vendors who sell a stamina coffee.
 
-// Special pedestrians are ordinary peds with a kind flag and tuned speed, so
-// updatePeds already knows how to walk them, flee them and despawn them.
-// The kind only changes how they look and how fast they move.
-export const STREET_PED_KINDS = {
-  jogger: { speed: 95, shirt: '#ff6b6b', name: 'Jogger' },
-  tourist: { speed: 26, shirt: '#f5c518', name: 'Tourist' },
-  vendor: { speed: 0, shirt: '#2ecc71', name: 'Vendor' },
-};
+import * as THREE from 'three';
+import { S, W } from './state.js';
+import { GARAGE } from './config.js';
+import { dist2d } from './random.js';
+import { sfx } from './audio.js';
 
-function spawnSpecialPed(S, rng, kind) {
-  const spec = STREET_PED_KINDS[kind];
-  const p = sidewalkPoint(rng, S.city);
-  const ped = {
-    x: p.x, y: p.y, angle: rng.range(0, Math.PI * 2),
-    speed: spec.speed, name: spec.name,
-    shirt: spec.shirt, hp: 100, flee: 0,
-    target: null, panic: 0, walkPhase: rng.range(0, 6),
-    // Vendors never walk: a huge idle timer pins them to their cart, and
-    // the update loop treats idle peds as standing still.
-    idle: kind === 'vendor' ? 9999 : 0,
-    kind,
-  };
-  S.peds.push(ped);
-  return ped;
-}
+let pickupMeshes = [];
+let stashMeshes = [];
+let vendorMeshes = [];
 
-// Park a few of the new cars around the city, and put the new faces on the
-// pavements. Called once at world creation and again on restart.
-export function spawnStreetLife(S, rng) {
-  // Two limos outside the hotel, two pickups by the docks — parked, so the
-  // player can steal one the moment they walk past.
-  const limoSpots = [
-    { x: 35 * TILE, y: 18 * TILE, a: 0 },
-    { x: 35 * TILE, y: 19 * TILE, a: Math.PI },
-  ];
-  for (const spot of limoSpots) {
-    S.cars.push(makeCar(spot.x, spot.y, spot.a, 'limo', null));
+const PICKUP_COLORS = { wrench: 0x8a8f96, coffee: 0x6a4a2a, briefcase: 0xd8b93a };
+
+export function buildStreetlife() {
+  clearStreetlife();
+  const geo = new THREE.OctahedronGeometry(1.1);
+  for (const pk of S.pickups) {
+    if (pk.taken) continue;
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: PICKUP_COLORS[pk.kind] || 0xffffff }));
+    m.position.set(pk.x, 1.4, pk.z);
+    W.scene.add(m);
+    pickupMeshes.push({ mesh: m, pk });
   }
-  const pickupSpots = [
-    { x: 56 * TILE, y: 52 * TILE, a: Math.PI / 2 },
-    { x: 58 * TILE, y: 54 * TILE, a: -Math.PI / 2 },
-  ];
-  for (const spot of pickupSpots) {
-    S.cars.push(makeCar(spot.x, spot.y, spot.a, 'pickup', null));
+  const stashGeo = new THREE.BoxGeometry(1.4, 1.0, 1.0);
+  for (const st of S.stash) {
+    if (st.taken) continue;
+    const m = new THREE.Mesh(stashGeo, new THREE.MeshBasicMaterial({ color: 0xffd23a }));
+    m.position.set(st.x, 1.0, st.z);
+    W.scene.add(m);
+    stashMeshes.push({ mesh: m, st });
   }
-  // Joggers run the beach road, tourists drift around the Plaza and the
-  // Pier, and one vendor holds down his cart at the Plaza all day.
-  for (let i = 0; i < 4; i++) spawnSpecialPed(S, rng, 'jogger');
-  for (let i = 0; i < 4; i++) spawnSpecialPed(S, rng, 'tourist');
-  spawnSpecialPed(S, rng, 'vendor');
-  const plaza = S.city.places.plaza;
-  const vendor = S.peds[S.peds.length - 1];
-  vendor.x = plaza.x + 80;
-  vendor.y = plaza.y + 40;
-}
-
-// New pickups, scattered on pavements like the old ones. Counts are small
-// on purpose: a wrench should feel like a find, not like litter.
-export function spawnStreetPickups(S, rng, n) {
-  const kinds = ['wrench', 'wrench', 'coffee', 'coffee', 'briefcase', 'briefcase'];
-  const total = n || 10;
-  for (let i = 0; i < total; i++) {
-    const p = sidewalkPoint(rng, S.city);
-    const kind = kinds[i % kinds.length];
-    S.pickups.push({
-      x: p.x, y: p.y, kind,
-      value: kind === 'briefcase' ? 75 : 0,
-      bob: rng.range(0, 6),
-    });
+  const vendorGeo = new THREE.CylinderGeometry(1.6, 1.8, 2.6, 8);
+  for (const v of S.vendors) {
+    const m = new THREE.Mesh(vendorGeo, new THREE.MeshLambertMaterial({ color: 0xd85a3a }));
+    m.position.set(v.x, 1.3, v.z);
+    W.scene.add(m);
+    vendorMeshes.push({ mesh: m, v });
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.8, 0.2), new THREE.MeshBasicMaterial({ color: 0xffe14a }));
+    sign.position.set(v.x, 3.2, v.z);
+    W.scene.add(sign);
+    vendorMeshes.push({ mesh: sign, v });
   }
 }
 
-// What each new pickup does when the player walks over it. Called from
-// updatePickups in combat.js; returns true when this module handled it.
-export function applyStreetPickup(S, pk, audio) {
-  if (pk.kind === 'wrench') {
-    if (S.player.inCar) {
-      S.player.inCar.hp = Math.min(100, S.player.inCar.hp + 60);
-      return 'Wrench — car repaired +60';
+function clearStreetlife() {
+  for (const p of pickupMeshes) W.scene.remove(p.mesh);
+  for (const p of stashMeshes) W.scene.remove(p.mesh);
+  for (const p of vendorMeshes) W.scene.remove(p.mesh);
+  pickupMeshes = []; stashMeshes = []; vendorMeshes = [];
+}
+
+export function updateStreetlife(dt) {
+  const p = S.player;
+  const px = p.car ? p.car.x : p.x, pz = p.car ? p.car.z : p.z;
+  const t = performance.now() / 1000;
+  for (const { mesh, pk } of pickupMeshes) {
+    mesh.rotation.y += dt * 2;
+    mesh.position.y = 1.4 + Math.sin(t * 3 + pk.x) * 0.25;
+    if (!pk.taken && dist2d(px, pz, pk.x, pk.z) < 3.5) {
+      pk.taken = true;
+      mesh.visible = false;
+      if (pk.kind === 'wrench' && p.car) { p.car.damage = Math.max(0, p.car.damage - 50); S.banner = { text: 'WRENCH', sub: 'Car patched up', t: 2 }; }
+      if (pk.kind === 'coffee') { S.stamina = 100; S.banner = { text: 'COFFEE', sub: 'Stamina full', t: 2 }; }
+      if (pk.kind === 'briefcase') { S.money += 60; S.banner = { text: 'FOUND CASH', sub: '+$60', t: 2 }; sfx.cash(); }
+      sfx.pickup();
     }
-    return 'Wrench — no car to fix right now';
   }
-  if (pk.kind === 'coffee') {
-    S.player.stamina = 100;
-    return 'Coffee! Sprint stamina refilled';
+  for (const { mesh, st } of stashMeshes) {
+    mesh.rotation.y += dt * 1.5;
+    if (!st.taken && dist2d(px, pz, st.x, st.z) < 3.5) {
+      st.taken = true;
+      mesh.visible = false;
+      S.money += 100;
+      S.banner = { text: 'STASH FOUND', sub: '+$100', t: 2.5 };
+      sfx.cash();
+    }
   }
-  if (pk.kind === 'briefcase') {
-    return null; // money is added by the caller, like the cash pickup
+  // Garage: drive in and press G to repair for $120.
+  const gd = dist2d(px, pz, GARAGE.x, GARAGE.z);
+  S.garageNear = gd < GARAGE.r;
+  if (S.garageNear && p.car && p.car.damage > 0 && S.money >= GARAGE.price) {
+    S.objective = `At ${GARAGE.name} — press G to repair ($${GARAGE.price})`;
   }
-  return null;
 }
 
-// The Plaza vendor sells coffee for $5: walk up to his cart and press B.
-// It is the only thing in Solmar Bay you can buy with a keypress, and it
-// exists so the vendor is a person, not scenery.
-export const VENDOR_COFFEE_PRICE = 5;
+export function tryGarageRepair() {
+  const p = S.player;
+  if (!S.garageNear || !p.car) return;
+  if (p.car.damage <= 0) { S.banner = { text: "MACK'S GARAGE", sub: 'She\'s already clean', t: 2 }; return; }
+  if (S.money < GARAGE.price) { S.banner = { text: "MACK'S GARAGE", sub: 'Not enough cash — $120', t: 2 }; sfx.fail(); return; }
+  S.money -= GARAGE.price;
+  p.car.damage = 0;
+  S.dialogue = { name: 'MACK', line: 'You break it, I bill it. Hundred and twenty, and she\'ll run like new.', t: 5 };
+  sfx.mission();
+}
 
-export function nearestVendor(S) {
-  let best = null, bestD = 80;
-  for (const ped of S.peds) {
-    if (ped.kind !== 'vendor' || ped.hp <= 0) continue;
-    const d = Math.hypot(ped.x - S.player.x, ped.y - S.player.y);
-    if (d < bestD) { bestD = d; best = ped; }
+export function tryBuyCoffee() {
+  const p = S.player;
+  if (p.car) return;
+  for (const v of S.vendors) {
+    if (dist2d(p.x, p.z, v.x, v.z) < 5) {
+      if (S.money < 5) { sfx.fail(); return; }
+      S.money -= 5;
+      S.stamina = 100;
+      S.banner = { text: 'COFFEE — $5', sub: 'Stamina full', t: 2 };
+      sfx.pickup();
+      return;
+    }
   }
-  return best;
-}
-
-export function buyCoffee(S, audio) {
-  const vendor = nearestVendor(S);
-  if (!vendor) { addMessage(S, 'No vendor nearby — the coffee cart is at the Plaza.'); return; }
-  if (S.money < VENDOR_COFFEE_PRICE) {
-    addMessage(S, `Coffee is $${VENDOR_COFFEE_PRICE} — you are $${VENDOR_COFFEE_PRICE - S.money} short.`);
-    return;
-  }
-  S.money -= VENDOR_COFFEE_PRICE;
-  S.player.stamina = 100;
-  addMessage(S, 'Vendor: "Hot coffee, fresh off the cart. Run well, Rook." — stamina full');
-  if (audio) audio.pickup();
-}
-
-// A short line for the title screen and the pause screen, so new players
-// know the new systems exist before they find them by accident.
-export function streetLifeLines() {
-  return [
-    'New in town: street races (V at a 🏁 pad), gang turf to take,',
-    'a limo and a pickup to steal, joggers, tourists and a vendor.',
-    'Look for wrenches (fix your car), coffee (sprint) and briefcases ($75).',
-  ];
-}
-
-// How many of the new rides the player has stolen — a small stat for the
-// end screen, next to cars stolen and stunts landed.
-export function countNewRidesStolen(S) {
-  return (S.stats.carsStolenByType && S.stats.carsStolenByType.limo || 0)
-    + (S.stats.carsStolenByType && S.stats.carsStolenByType.pickup || 0);
 }

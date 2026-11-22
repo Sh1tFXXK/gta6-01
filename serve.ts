@@ -1,7 +1,12 @@
-// A tiny static server for game/ (Node 22, standard library only), so an entry can be played
-// locally without a build step: `node serve.ts` serves game/ on http://localhost:8080.
-// It sends the MIME types a browser game needs, refuses any path outside game/, and otherwise
-// does nothing clever: this is a development convenience, not a web server for the internet.
+// A tiny static server for game/ (Node 22, standard library only), so the
+// 3D entry can be played locally without a build step:
+//   node serve.ts            serves game/ on http://localhost:8080
+//   node serve.ts --port N   serves game/ on http://localhost:N
+// It sends the MIME types a browser game needs (including JavaScript
+// modules and the vendored three.js files), refuses any path outside game/,
+// and otherwise does nothing clever: this is a development convenience,
+// not a web server for the internet.
+
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -62,14 +67,10 @@ createServer((request, response) => {
     return;
   }
   response.writeHead(200, {
-    'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
+    'content-type': MIME[extname(file)] ?? 'application/octet-stream',
     'content-length': size,
-    'cache-control': 'no-store',
-    'x-content-type-options': 'nosniff',
   });
   createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`game/ is on http://localhost:${port}`);
-  console.log('Screenshots: ?shot=start | ?shot=drive | ?shot=chase | ?shot=mission (add &seed=1)');
-  console.log('Controls: WASD move/drive · E enter car · Click shoot · F punch · Shift sprint · G horn · N mission · T taxi · R rampage');
+}).listen(port, () => {
+  console.log(`Solmar Nights 3D serving game/ on http://localhost:${port}`);
 });
