@@ -1,5 +1,9 @@
 # Solmar Nights — a 3D open-world crime game
 
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Sh1tFXXK/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Sh1tFXXK/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 An original 3D open-world crime game set in the invented city of **Solmar Bay**,
 built with three.js for make.fun's "Make GTA 6" bounty ($1,666 USDC, 100 paid places).
 
